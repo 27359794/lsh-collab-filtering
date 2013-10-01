@@ -1,3 +1,4 @@
+
 """
 training_med: U = 11804 users
 """
@@ -13,6 +14,7 @@ import numpy as np
 from collections import defaultdict
 import ipdb; bug = ipdb.set_trace
 import os
+import itertools
 
 import utils
 import cosine_nn
@@ -25,32 +27,78 @@ WORK_DIR = '..'
 TRAINING_SET = 'training_med'
 CACHE = 'cache'
 
-
-
+UNCLUSTERED = -1
+NOISE = -2
 
 
 def main():
-    ## INPUT AND SETUP
+    # Require angle < 72deg
+    eps = 1 - np.cos(2/5.0 * np.pi)
+    min_pts = 3
+    dbscan(eps, min_pts)
+
+
+def dbscan(eps, min_pts):
+    """
+    for each unvisited point in dataset:
+        mark as visited
+        regionquery point
+        if not enough points in region:
+            mark as noise
+        else:
+            find cluster around point
+
+    """
+    print 'beginning dbscan'
     movie_vecs = get_user_normalised_ratings()
     movie_names = get_movie_names()
     viewer_set = {mi: set(movie_vecs[mi].keys()) for mi in MOVIE_IDS}
-    user_list = set()
-    for v in viewer_set.itervalues():
-        user_list.update(v)
-    user_list = list(user_list)
-    USER_IDS = user_list
-    print 'generated viewer sets...'
+    user_ids = list(itertools.chain.from_iterable(viewer_set.itervalues()))
+    visited = set()
 
-    # most_popular_id = np.argmax(map(len, movie_vecs[1:])) + 1
+    nn_index = cosine_nn.CosineNN(len(user_ids))
 
-    nn = cosine_nn.CosineNN(len(user_list))
+    cluster_ids = {mid: UNCLUSTERED for mid in MOVIE_IDS}
+    cur_cluster_id = 0
 
-    # print 'I AM', movie_names[most_popular_id]
+    # Add all movies to nn_index
+    for mid in MOVIE_IDS:
+        col = np.fromiter(
+            ((movie_vecs[mid][u] if u in viewer_set[mid] else 0) for u in user_ids),
+            int)
+        nn_index.index(mid, col)
+
+    print 'indexing and setup complete'
+
+    for mid in MOVIE_IDS:
+        if mid in visited:
+            continue
+        visited.add(mid)
+        print 'starting cluster', cur_cluster_id
+
+        neighbours = nn_index.find_neighbours(mid, eps)
+        if len(neighbours) < min_pts:
+            cluster_ids[mid] = NOISE
+        else:
+            expand_cluster(mid, neighbours, visited, nn_index,
+                           cur_cluster_id, cluster_ids, eps, min_pts)
+            cur_cluster_id += 1
 
 
-
-# def dbscan(points):
-
+def expand_cluster(mid, neighbours, visited, nn_index,
+                   cur_cluster_id, cluster_ids, eps, min_pts):
+    cluster_ids[mid] = cur_cluster_id
+    stack = neighbours  # this is a set
+    while stack:
+        cur_pt = stack.pop()  # cur_pt is a movie ID
+        if cur_pt in visited:
+            continue
+        visited.add(cur_pt)
+        next_neighbours = nn_index.find_neighbours(cur_pt, eps)
+        if len(next_neighbours) >= min_pts:
+            stack.update(next_neighbours)
+        if cluster_ids[cur_pt] in [UNCLUSTERED, NOISE]:
+            cluster_ids[cur_pt] = cur_cluster_id
 
 
 def cached(f):
@@ -79,7 +127,7 @@ def cached(f):
 
 @cached
 def read_probe():
-    f = open('probe.txt')
+    f = open(os.path.join(WORK_DIR, 'probe.txt'))
     li = set()
     d = {}
     lastid = None
@@ -117,16 +165,6 @@ def get_user_normalised_ratings():
 
     print 'normalised ratings...'
     return ratings
-
-
-# def inverse_index(movie_ratings):
-#     """A dict of userid : [(movie id, rating), ...]"""
-#     user_index = defaultdict(list)
-#     for mi in MOVIE_IDS:
-#         # import pdb; pdb.set_trace()
-#         for u, rating in movie_ratings[mi].iteritems():
-#             user_index[u].append((mi, rating))
-#     return user_index
 
 
 @cached

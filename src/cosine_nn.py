@@ -30,10 +30,10 @@ There's a >=0.82 chance of neighbours being in the result set,
 and a <=0.12 chance of non-neighbours being in the result set.
 """
 
-
 import numpy as np
 from collections import defaultdict
 import scipy.spatial
+
 
 class CosineNN(object):
     BLOCK_SIZE = 13#12
@@ -49,6 +49,7 @@ class CosineNN(object):
         self.nn_index = defaultdict(list)
 
     def index(self, mid, col):
+        """mid is the identifier for the column. col is a column vector."""
         # Form the column vector of the utility matrix for m
         sig = self.signature_of(col)
 
@@ -67,12 +68,26 @@ class CosineNN(object):
         the probability values of the (d_1, d_2, p_1, p_2) hash family in use.
 
         """
-        sig = signatures[mid]
+        sig = self.signatures[mid]
         resultset = set()
         for block_num in xrange(CosineNN.NUM_BLOCKS):
             block_val = self.extract_block(sig, block_num)
-            resultset.update(nn_index[(block_num, block_val)])
+            resultset.update(self.nn_index[(block_num, block_val)])
         return resultset
+
+
+    def find_neighbours(self, mid, eps):
+        """
+        This is an exact version of query(). Precision guaranteed 100%.
+        Recall is the same as the recall of query(). Also significantly slower
+        because it computes all the cosines.
+
+        """
+        maybe_neighbours = self.query(mid)
+        actual_neighbours = {nmid for nmid in maybe_neighbours
+                             if self.cosine_between(mid, nmid) < eps}
+        return actual_neighbours
+
 
     def extract_block(self, sig, block_num):
         # Shift the sig right until the last BLOCK_SIZE bits are the block,
@@ -107,5 +122,5 @@ class CosineNN(object):
             x <<= 1
         return num_set
 
-    def angle_between(self, mid1, mid2):
+    def cosine_between(self, mid1, mid2):
         return scipy.spatial.distance.cosine(self.col_vecs[mid1], self.col_vecs[mid2])
