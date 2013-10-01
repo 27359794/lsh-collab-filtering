@@ -19,7 +19,7 @@ import itertools
 import utils
 import cosine_nn
 
-START_MID, END_MID = 1, 300
+START_MID, END_MID = 1, 1000
 MOVIE_IDS = range(START_MID, END_MID+1)
 USER_IDS = None
 
@@ -34,7 +34,7 @@ NOISE = -2
 def main():
     # Require angle < 72deg
     eps = 1 - np.cos(2/5.0 * np.pi)
-    min_pts = 3
+    min_pts = 5
     dbscan(eps, min_pts)
 
 
@@ -84,6 +84,18 @@ def dbscan(eps, min_pts):
                            cur_cluster_id, cluster_ids, eps, min_pts)
             cur_cluster_id += 1
 
+    print 'UNCLUSTERED:', cluster_ids.values().count(UNCLUSTERED)
+    print 'NOISE:', cluster_ids.values().count(NOISE)
+    print 'TOTAL', len(cluster_ids)
+
+    print cluster_ids
+
+    for cluster_id in xrange(0, cur_cluster_id):
+        print '-' * 50
+        ms = {mid for (mid, cid) in cluster_ids.iteritems() if cid == cluster_id}
+        for mid in ms:
+            print movie_names[mid]
+
 
 def expand_cluster(mid, neighbours, visited, nn_index,
                    cur_cluster_id, cluster_ids, eps, min_pts):
@@ -91,13 +103,13 @@ def expand_cluster(mid, neighbours, visited, nn_index,
     stack = neighbours  # this is a set
     while stack:
         cur_pt = stack.pop()  # cur_pt is a movie ID
-        if cur_pt in visited:
-            continue
-        visited.add(cur_pt)
-        next_neighbours = nn_index.find_neighbours(cur_pt, eps)
-        if len(next_neighbours) >= min_pts:
-            stack.update(next_neighbours)
+        if cur_pt not in visited:
+            visited.add(cur_pt)
+            next_neighbours = nn_index.find_neighbours(cur_pt, eps)
+            if len(next_neighbours) >= min_pts:
+                stack.update(next_neighbours)
         if cluster_ids[cur_pt] in [UNCLUSTERED, NOISE]:
+            print 'assigning to', cur_cluster_id
             cluster_ids[cur_pt] = cur_cluster_id
 
 
@@ -165,6 +177,16 @@ def get_user_normalised_ratings():
 
     print 'normalised ratings...'
     return ratings
+
+def inverse_index(movie_ratings):
+    """A dict of userid : [(movie id, rating), ...]"""
+    user_index = defaultdict(list)
+    for mi in MOVIE_IDS:
+        # import pdb; pdb.set_trace()
+        for u, rating in movie_ratings[mi].iteritems():
+            user_index[u].append((mi, rating))
+    return user_index
+
 
 
 @cached
