@@ -19,7 +19,7 @@ import itertools
 import utils
 import cosine_nn
 
-START_MID, END_MID = 1, 1000
+START_MID, END_MID = 1, 8000
 MOVIE_IDS = range(START_MID, END_MID+1)
 USER_IDS = None
 
@@ -34,7 +34,7 @@ NOISE = -2
 def main():
     # Require angle < 72deg
     eps = 1 - np.cos(2/5.0 * np.pi)
-    min_pts = 5
+    min_pts = 15
     dbscan(eps, min_pts)
 
 
@@ -49,17 +49,21 @@ def dbscan(eps, min_pts):
             find cluster around point
 
     """
-    print 'beginning dbscan'
     movie_vecs = get_user_normalised_ratings()
     movie_names = get_movie_names()
     viewer_set = {mi: set(movie_vecs[mi].keys()) for mi in MOVIE_IDS}
-    user_ids = list(itertools.chain.from_iterable(viewer_set.itervalues()))
+    user_ids = list(set.union(*viewer_set.itervalues()))
     visited = set()
+
+    print 'beginning dbscan. {} users, RVF size is {}'.format(
+            len(user_ids), len(user_ids)*cosine_nn.CosineNN.BLOCK_SIZE*cosine_nn.CosineNN.NUM_BLOCKS)
 
     nn_index = cosine_nn.CosineNN(len(user_ids))
 
     cluster_ids = {mid: UNCLUSTERED for mid in MOVIE_IDS}
     cur_cluster_id = 0
+
+    print 'NN setup complete. beginning indexing...'
 
     # Add all movies to nn_index
     for mid in MOVIE_IDS:
@@ -74,7 +78,6 @@ def dbscan(eps, min_pts):
         if mid in visited:
             continue
         visited.add(mid)
-        print 'starting cluster', cur_cluster_id
 
         neighbours = nn_index.find_neighbours(mid, eps)
         if len(neighbours) < min_pts:
@@ -84,7 +87,7 @@ def dbscan(eps, min_pts):
                            cur_cluster_id, cluster_ids, eps, min_pts)
             cur_cluster_id += 1
 
-    print 'UNCLUSTERED:', cluster_ids.values().count(UNCLUSTERED)
+    assert cluster_ids.values().count(UNCLUSTERED) == 0, 'all points visited'
     print 'NOISE:', cluster_ids.values().count(NOISE)
     print 'TOTAL', len(cluster_ids)
 
@@ -95,6 +98,16 @@ def dbscan(eps, min_pts):
         ms = {mid for (mid, cid) in cluster_ids.iteritems() if cid == cluster_id}
         for mid in ms:
             print movie_names[mid]
+        cosine_pairs = [nn_index.cosine_between(mida, midb)
+                        for (mida, midb) in itertools.combinations(ms, 2)]
+        print 'AVERAGE COSINE SIMILARITY OF CLUSTER MEMBERS:', np.mean(cosine_pairs)
+
+    random_mids = random.sample(MOVIE_IDS, min(len(MOVIE_IDS), 100))  # Without replacement
+    cosine_pairs = [nn_index.cosine_between(mida, midb)
+                    for (mida, midb) in itertools.combinations(random_mids, 2)]
+
+    cosine_pairs = np.compress(~np.isnan(cosine_pairs), cosine_pairs)
+    print 'AVERAGE COSINE SIMILARITY OF CONTROL GROUP:', stats.nanmean(cosine_pairs)
 
 
 def expand_cluster(mid, neighbours, visited, nn_index,

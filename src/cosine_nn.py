@@ -28,16 +28,51 @@ Out[31]: (0.819708249125523, 0.11933437406869052)
 i.e. a (pi/3, pi/2, 0.82, 0.12)-sensitive hash family.
 There's a >=0.82 chance of neighbours being in the result set,
 and a <=0.12 chance of non-neighbours being in the result set.
+
+
+
+
+OR gate of AND gates:
+a = k
+o = l
+
+p = probability that 1 pair of bits match -- 1 - angle/pi
+
+p(block of length a matches all)    = p^a
+p(block of length o matches once)   = 1-(doesn't match all)
+                                    = 1 - P(doesn't match once)^o
+                                    = 1 - (1-p)^o
+
+OR gate of AND gates: 1 - (1 - (1 - 1/3.0)**a)**o, 1 - (1 - (1 - 1/2.0)**a)**o
+a,o = 7,60
+Out[78]: (0.9731803062239186, 0.37536677884638525)
+
+AND gate of OR gates: (1 - (1/3.0)**o)**a, (1 - (1/2.0)**o)**a
+
+
+
+
+
+
+a up, both down
+o up, both up
+
+
+
 """
 
 import numpy as np
 from collections import defaultdict
 import scipy.spatial
 
-
+#7:2min
+#11:47s
+#13: 42s
+#15: 44s
+#20: 53s
 class CosineNN(object):
-    BLOCK_SIZE = 13#12
-    NUM_BLOCKS = 300#70
+    BLOCK_SIZE = 12
+    NUM_BLOCKS = 330
     SIG_LENGTH = BLOCK_SIZE * NUM_BLOCKS
 
     def __init__(self, vector_len):
