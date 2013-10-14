@@ -30,8 +30,6 @@ There's a >=0.82 chance of neighbours being in the result set,
 and a <=0.12 chance of non-neighbours being in the result set.
 
 
-
-
 OR gate of AND gates:
 a = k
 o = l
@@ -50,13 +48,8 @@ Out[78]: (0.9731803062239186, 0.37536677884638525)
 AND gate of OR gates: (1 - (1/3.0)**o)**a, (1 - (1/2.0)**o)**a
 
 
-
-
-
-
-a up, both down
-o up, both up
-
+hypothesis: OR of ANDs is always better than AND of ORs
+doesn't matter, coz we can't design a structure for querying AND of ORs...
 
 
 """
@@ -116,12 +109,14 @@ class CosineNN(object):
         This is an exact version of query(). Precision guaranteed 100%.
         Recall is the same as the recall of query(). Also significantly slower
         because it computes all the cosines.
+        mid is one of the results! i.e. it is its own neighbour.
 
         """
         maybe_neighbours = self.query(mid)
         actual_neighbours = {nmid for nmid in maybe_neighbours
-                             if self.cosine_between(mid, nmid) < eps}
+                             if self.cosine_dist_between(mid, nmid) < eps}
         return actual_neighbours
+        # return maybe_neighbours
 
 
     def extract_block(self, sig, block_num):
@@ -157,5 +152,5 @@ class CosineNN(object):
             x <<= 1
         return num_set
 
-    def cosine_between(self, mid1, mid2):
+    def cosine_dist_between(self, mid1, mid2):
         return scipy.spatial.distance.cosine(self.col_vecs[mid1], self.col_vecs[mid2])
