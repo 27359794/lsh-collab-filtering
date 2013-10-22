@@ -1,4 +1,5 @@
 """
+Incomplete working script. Implementing bits and pieces for CF.
 training_med: U = ~15000 users
 """
 
@@ -78,17 +79,13 @@ def index_by_users():
             uid,
             0,
             by_dist[0] if by_dist else '-',
-            # dotdot(movie_names[mid]),
-            # dotdot(movie_names[by_dist[0]]) if by_dist else '-',
             np.degrees(np.arccos(1 - nn_index.cosine_dist_between(by_dist[0], uid))) if by_dist else '-'
         ])
 
-
     # List of (mid, uid) from probe that we have to predict
-    to_predict = []
-
     probe_ratings = read_probe()
 
+    to_predict = []
     for mid, mratings in probe_ratings.iteritems():
         for uid, rating in mratings.iteritems():
             if uid in user_ids:
@@ -98,22 +95,8 @@ def index_by_users():
         guess_rating(nn_index, iindex, uid, mid)
 
 
-
-
-    # for mid in MOVIE_IDS:
-    #     # demand neighbours inside 72deg
-    #     neighbours = nn_index.query(mid) - set([mid])
-    #     by_dist = sorted(neighbours, key=lambda nmid: nn_index.cosine_dist_between(mid, nmid))
-    #     t.add_row([
-    #         mid,
-    #         dotdot(movie_names[mid]),
-    #         dotdot(movie_names[by_dist[0]]) if by_dist else '-',
-    #         np.degrees(np.arccos(1 - nn_index.cosine_dist_between(by_dist[0], mid))) if by_dist else '-'
-    #     ])
-    print t
-
-
 def guess_rating(nn_index, iindex, uid, mid):
+    """Guess NORMALISED rating. You should scale this by uid's mean and std."""
     eps = 1 - np.cos(1/2.0 * np.pi)
     neighbours = nn_index.find_neighbours(uid, eps)
     neighbour_ratings = []
@@ -121,9 +104,7 @@ def guess_rating(nn_index, iindex, uid, mid):
         neighbour_rating = iindex[nuid][mid, 0]
         if neighbour_rating != 0:  # Ignore non-ratings
             neighbour_ratings.append(neighbour_rating)
-    print neighbour_ratings
-
-    bug()
+    return np.mean(neighbour_ratings) if neighbour_ratings else 0
 
 
 def find_neighbours_for_each():
