@@ -45,18 +45,13 @@ OR gate of AND gates: 1 - (1 - (1 - 1/3.0)**a)**o, 1 - (1 - (1 - 1/2.0)**a)**o
 a,o = 7,60
 Out[78]: (0.9731803062239186, 0.37536677884638525)
 
-AND gate of OR gates: (1 - (1/3.0)**o)**a, (1 - (1/2.0)**o)**a
-
-
-hypothesis: OR of ANDs is always better than AND of ORs
-doesn't matter, coz we can't design a structure for querying AND of ORs...
-
 
 """
 
 import numpy as np
 from collections import defaultdict
 import scipy.spatial
+import ipdb; bug = ipdb.set_trace
 
 #7:2min
 #11:47s
@@ -64,14 +59,14 @@ import scipy.spatial
 #15: 44s
 #20: 53s
 class CosineNN(object):
-    BLOCK_SIZE = 12
-    NUM_BLOCKS = 330
+    BLOCK_SIZE = 13# 12
+    NUM_BLOCKS = 70#330
     SIG_LENGTH = BLOCK_SIZE * NUM_BLOCKS
 
     def __init__(self, vector_len):
         self.col_vecs = {}
         self.signatures = {}
-        self.random_vector_family = np.random.rand(CosineNN.SIG_LENGTH, vector_len) - 0.5
+        self.random_vector_family = np.matrix(np.random.rand(CosineNN.SIG_LENGTH, vector_len) - 0.5)
 
         # nn_index[(which_block, block_integer_value)] = list of m-ids in bucket
         self.nn_index = defaultdict(list)
@@ -106,15 +101,19 @@ class CosineNN(object):
 
     def find_neighbours(self, mid, eps):
         """
+        Returns a set of IDs to neighbours of object with id `mid'. All
+        neighbours nmid have cosine-dist(mid, nmid) <= eps.
+        Does NOT return mid as one of the results.
+
         This is an exact version of query(). Precision guaranteed 100%.
         Recall is the same as the recall of query(). Also significantly slower
         because it computes all the cosines.
-        mid is one of the results! i.e. it is its own neighbour.
 
         """
         maybe_neighbours = self.query(mid)
         actual_neighbours = {nmid for nmid in maybe_neighbours
-                             if self.cosine_dist_between(mid, nmid) < eps}
+                             if self.cosine_dist_between(mid, nmid) <= eps and
+                             nmid != mid}
         return actual_neighbours
         # return maybe_neighbours
 
@@ -127,13 +126,12 @@ class CosineNN(object):
 
     def signature_of(self, vec):
         """Takes a numpy vector of length U and produces its LSH."""
-        sketch = self.random_vector_family.dot(vec)
+        sketch = self.random_vector_family * vec  # This is a matrix product
+        # bug()
         num = 0
-        counter = 0
-        for k in sketch:
-            if k >= 0:
-                num |= (1 << counter)
-            counter += 1
+        for i in xrange(CosineNN.SIG_LENGTH):
+            if sketch[i,0] >= 0:
+                num |= (1 << i)
         return num
 
     def nxor_count_bits(self, a, b):
@@ -153,4 +151,6 @@ class CosineNN(object):
         return num_set
 
     def cosine_dist_between(self, mid1, mid2):
-        return scipy.spatial.distance.cosine(self.col_vecs[mid1], self.col_vecs[mid2])
+        # Requires .todense() or else 'dimension missmatch'
+        return scipy.spatial.distance.cosine(self.col_vecs[mid1].todense(),
+                                             self.col_vecs[mid2].todense())

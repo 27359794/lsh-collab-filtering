@@ -1,30 +1,32 @@
-
 """
 training_med: U = ~15000 users
 """
 
-import scipy.stats as stats
-import sklearn.metrics
-import random
-import time
+
 import cPickle
+import ipdb; bug = ipdb.set_trace
+import itertools
+import os
 import prettytable
 import pylab
-import numpy as np
-from collections import defaultdict
-import ipdb; bug = ipdb.set_trace
-import os
-import itertools
+import random
+import scipy.sparse
+import sklearn.metrics
+import time
 
-import utils
+import numpy as np
+import scipy.stats as stats
+
+from collections import defaultdict
+
 import cosine_nn
 
-START_MID, END_MID = 1, 2000
+START_MID, END_MID = 1, 1000
 MOVIE_IDS = range(START_MID, END_MID+1)
 USER_IDS = None
 
 WORK_DIR = '..'
-TRAINING_SET = 'training_med'
+TRAINING_SET = 'noprobe/training_med'
 CACHE = 'cache'
 
 UNCLUSTERED = -1
@@ -32,11 +34,109 @@ NOISE = -2
 
 
 def main():
+    # find_neighbours_for_each()
+    index_by_users()
+
     # Require angle < 72deg
-    eps = 1-np.cos(3/7.0 * np.pi)# 1 - np.cos(2/5.0 * np.pi)
-    min_pts = 8
+    # eps = 1-np.cos(3/7.0 * np.pi)# 1 - np.cos(2/5.0 * np.pi)
+    # min_pts = 8
     # dbscan_parameter_est(min_pts)
-    dbscan(eps, min_pts)
+    # dbscan(eps, min_pts)
+
+
+
+def index_by_users():
+    movie_vecs = get_movie_ratings()
+    iindex = get_normalised_inverse_index(movie_vecs)
+
+    movie_names = get_movie_names()
+    user_ids = iindex.keys()
+
+    print '{} users, RVF size is {}'.format(
+            len(user_ids), len(user_ids)*cosine_nn.CosineNN.BLOCK_SIZE*cosine_nn.CosineNN.NUM_BLOCKS)
+
+    nn_index = cosine_nn.CosineNN(END_MID + 1)  # +1 because mids are 1-based
+
+    print 'NN setup complete. beginning indexing...'
+    # Add all movies to nn_index
+    for i, uid in enumerate(user_ids):
+        col = iindex[uid]
+        nn_index.index(uid, col)
+        print i/float(len(user_ids)), uid
+    print 'indexing and setup complete'
+
+    t = prettytable.PrettyTable(['id', 'name', 'closest', 'dist'])
+
+    uid = user_ids[0]
+    eps = 1 - np.cos(1/2.0 * np.pi)
+    print 'done'
+    for i, uid in enumerate(user_ids):
+        neighbours = nn_index.find_neighbours(uid, eps)
+        print i, len(neighbours) / float(len(nn_index.query(uid)))
+        by_dist = sorted(neighbours, key=lambda nuid: nn_index.cosine_dist_between(uid, nuid))
+        t.add_row([
+            uid,
+            0,
+            by_dist[0] if by_dist else '-',
+            # dotdot(movie_names[mid]),
+            # dotdot(movie_names[by_dist[0]]) if by_dist else '-',
+            np.degrees(np.arccos(1 - nn_index.cosine_dist_between(by_dist[0], uid))) if by_dist else '-'
+        ])
+    bug()
+
+    # for mid in MOVIE_IDS:
+    #     # demand neighbours inside 72deg
+    #     neighbours = nn_index.query(mid) - set([mid])
+    #     by_dist = sorted(neighbours, key=lambda nmid: nn_index.cosine_dist_between(mid, nmid))
+    #     t.add_row([
+    #         mid,
+    #         dotdot(movie_names[mid]),
+    #         dotdot(movie_names[by_dist[0]]) if by_dist else '-',
+    #         np.degrees(np.arccos(1 - nn_index.cosine_dist_between(by_dist[0], mid))) if by_dist else '-'
+    #     ])
+    print t
+
+
+def find_neighbours_for_each():
+    movie_vecs = get_user_normalised_ratings()
+    movie_names = get_movie_names()
+    viewer_set = {mi: set(movie_vecs[mi].keys()) for mi in MOVIE_IDS}
+    user_ids = list(set.union(*viewer_set.itervalues()))
+
+    min_degrees = 78.0
+    eps = 1 - np.cos(np.radians(min_degrees))
+
+    print '{} users, RVF size is {}'.format(
+            len(user_ids), len(user_ids)*cosine_nn.CosineNN.BLOCK_SIZE*cosine_nn.CosineNN.NUM_BLOCKS)
+
+    nn_index = cosine_nn.CosineNN(len(user_ids))
+
+    print 'NN setup complete. beginning indexing...'
+    # Add all movies to nn_index
+    for mid in MOVIE_IDS:
+        col = np.fromiter(
+            ((movie_vecs[mid][u] if u in viewer_set[mid] else 0) for u in user_ids),
+            int)
+        nn_index.index(mid, col)
+    print 'indexing and setup complete'
+
+    t = prettytable.PrettyTable(['id', 'name', 'closest', 'dist'])
+
+    for mid in MOVIE_IDS:
+        # demand neighbours inside 72deg
+        neighbours = nn_index.query(mid) - set([mid])
+        by_dist = sorted(neighbours, key=lambda nmid: nn_index.cosine_dist_between(mid, nmid))
+        t.add_row([
+            mid,
+            dotdot(movie_names[mid]),
+            dotdot(movie_names[by_dist[0]]) if by_dist else '-',
+            np.degrees(np.arccos(1 - nn_index.cosine_dist_between(by_dist[0], mid))) if by_dist else '-'
+        ])
+    print t
+
+def dotdot(s):
+    lim = 35
+    return s if len(s)<lim else s[:lim-3] + '...'
 
 
 def dbscan_parameter_est(min_pts):
@@ -45,7 +145,6 @@ def dbscan_parameter_est(min_pts):
     viewer_set = {mi: set(movie_vecs[mi].keys()) for mi in MOVIE_IDS}
     user_ids = list(set.union(*viewer_set.itervalues()))
     visited = set()
-
 
     print 'beginning dbscan. {} users, RVF size is {}'.format(
             len(user_ids), len(user_ids)*cosine_nn.CosineNN.BLOCK_SIZE*cosine_nn.CosineNN.NUM_BLOCKS)
@@ -78,9 +177,6 @@ def dbscan_parameter_est(min_pts):
     scatters.sort(reverse=True)
     pylab.plot(scatters)
     pylab.show()
-
-
-
 
 
 def dbscan(eps, min_pts):
@@ -154,8 +250,6 @@ def dbscan(eps, min_pts):
 
 
 
-
-
 def expand_cluster(mid, neighbours, visited, nn_index,
                    cur_cluster_id, cluster_ids, eps, min_pts):
     cluster_ids[mid] = cur_cluster_id
@@ -175,6 +269,7 @@ def expand_cluster(mid, neighbours, visited, nn_index,
 def cached(f):
     name = '{}_{}-{}_{}_cache.pkl'.format(f.__name__, START_MID,
                                            END_MID, TRAINING_SET)
+    name = name.replace('/', '_slash_')
     fpath = os.path.join(WORK_DIR, CACHE, name)
     def writeToCache(data):
         with open(fpath, 'wb') as fout:
@@ -220,28 +315,71 @@ def fuzz_plot(xs, ys):
 
 @cached
 def get_user_normalised_ratings():
-    """Normalise each user's rating by subtracting their mean rating."""
+    """
+    Standardise each user's rating by subtracting their mean, dividing by
+    their stddev.
+
+    """
     ratings = get_movie_ratings()
     print 'read raw ratings...'
     iindex = inverse_index(ratings)
+
+    pylab.hist(map(len, iindex.values()))
+    pylab.show()
     print 'built inverse index...'
-    user_mean = {}
+    user_stats = {}  # userid -> (mean, stddev)
     for u, uvec in iindex.iteritems():
-        user_mean[u] = np.mean([r for (mi, r) in uvec])
+        user_ratings = [r for (mi, r) in uvec]
+        user_stats[u] = np.mean(user_ratings), np.std(user_ratings)
 
     for mi in MOVIE_IDS:
         mvec = ratings[mi]
         for u in mvec:
-            mvec[u] -= user_mean[u]
+            umean, ustddev = user_stats[u]
+            mvec[u] = (mvec[u] - umean) / (ustddev if ustddev > 0 else 1)
 
     print 'normalised ratings...'
     return ratings
+
+
+def get_normalised_inverse_index(movie_ratings):
+    """
+    A dict of userid : sparse.csr_matrix]. The ith element of the sparse row is the
+    user's normalised rating for the ith movie in MOVIE_IDS or 0 if they didn't
+    see that movie.
+
+    """
+    user_index = defaultdict(list)
+
+    assert MOVIE_IDS == sorted(MOVIE_IDS)
+    for mi in MOVIE_IDS:
+        for (uid, rating) in movie_ratings[mi].iteritems():
+            user_index[uid].append((mi, rating))
+
+    iindex = {}
+
+    for uid in user_index:
+        uratings = [r for (m, r) in user_index[uid]]
+        umean, ustddev = np.mean(uratings), np.std(uratings)
+        if ustddev == 0:
+            ustddev = 1  # Prevent div by 0
+
+        vec = [0] * (END_MID+1)#np.array(user_index[uid].todense())
+        for (mi, r) in user_index[uid]:
+            vec[mi] = (r-umean) / ustddev if r > 0 else 0
+        sparsified = scipy.sparse.csc_matrix(vec).T
+
+        if (len(set(uratings)) > 1 and
+            len(uratings) > 10):  # if our sparsified vector is interesting
+            iindex[uid] = sparsified
+
+    return iindex
+
 
 def inverse_index(movie_ratings):
     """A dict of userid : [(movie id, rating), ...]"""
     user_index = defaultdict(list)
     for mi in MOVIE_IDS:
-        # import pdb; pdb.set_trace()
         for u, rating in movie_ratings[mi].iteritems():
             user_index[u].append((mi, rating))
     return user_index
