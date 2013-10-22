@@ -51,6 +51,7 @@ Out[78]: (0.9731803062239186, 0.37536677884638525)
 import numpy as np
 from collections import defaultdict
 import scipy.spatial
+import doctest
 import ipdb; bug = ipdb.set_trace
 
 #7:2min
@@ -154,3 +155,6 @@ class CosineNN(object):
         # Requires .todense() or else 'dimension missmatch'
         return scipy.spatial.distance.cosine(self.col_vecs[mid1].todense(),
                                              self.col_vecs[mid2].todense())
+
+if __name__ == '__main__':
+    doctest.testmod()
