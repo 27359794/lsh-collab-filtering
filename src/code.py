@@ -21,7 +21,7 @@ from collections import defaultdict
 
 import cosine_nn
 
-START_MID, END_MID = 1, 1000
+START_MID, END_MID = 1, 500
 MOVIE_IDS = range(START_MID, END_MID+1)
 USER_IDS = None
 
@@ -72,7 +72,7 @@ def index_by_users():
     print 'done'
     for i, uid in enumerate(user_ids):
         neighbours = nn_index.find_neighbours(uid, eps)
-        print i, len(neighbours) / float(len(nn_index.query(uid)))
+        print i / float(len(user_ids))#, len(neighbours) / float(len(nn_index.query(uid)))
         by_dist = sorted(neighbours, key=lambda nuid: nn_index.cosine_dist_between(uid, nuid))
         t.add_row([
             uid,
@@ -82,7 +82,23 @@ def index_by_users():
             # dotdot(movie_names[by_dist[0]]) if by_dist else '-',
             np.degrees(np.arccos(1 - nn_index.cosine_dist_between(by_dist[0], uid))) if by_dist else '-'
         ])
-    bug()
+
+
+    # List of (mid, uid) from probe that we have to predict
+    to_predict = []
+
+    probe_ratings = read_probe()
+
+    for mid, mratings in probe_ratings.iteritems():
+        for uid, rating in mratings.iteritems():
+            if uid in user_ids:
+                to_predict.append((uid, mid))
+
+    for uid, mid in to_predict:
+        guess_rating(nn_index, iindex, uid, mid)
+
+
+
 
     # for mid in MOVIE_IDS:
     #     # demand neighbours inside 72deg
@@ -95,6 +111,19 @@ def index_by_users():
     #         np.degrees(np.arccos(1 - nn_index.cosine_dist_between(by_dist[0], mid))) if by_dist else '-'
     #     ])
     print t
+
+
+def guess_rating(nn_index, iindex, uid, mid):
+    eps = 1 - np.cos(1/2.0 * np.pi)
+    neighbours = nn_index.find_neighbours(uid, eps)
+    neighbour_ratings = []
+    for nuid in neighbours:
+        neighbour_rating = iindex[nuid][mid, 0]
+        if neighbour_rating != 0:  # Ignore non-ratings
+            neighbour_ratings.append(neighbour_rating)
+    print neighbour_ratings
+
+    bug()
 
 
 def find_neighbours_for_each():
@@ -293,21 +322,29 @@ def cached(f):
 
 @cached
 def read_probe():
-    f = open(os.path.join(WORK_DIR, 'probe.txt'))
-    li = set()
+    """A list whose ith element is a dict {user: rating} for movie i."""
+    f = open(os.path.join(WORK_DIR, 'probe_rated.txt'))
+    movie_vectors = {}
     d = {}
     lastid = None
     for line in f:
         if ':' in line:
             lastid = int(line.strip()[:-1])
-            d[lastid] = li
-            li = set()
+            if lastid >= START_MID and lastid <= END_MID:
+                movie_vectors[lastid] = {}
         else:
-            li.add(int(line))
-    return d
+            uid, rating, date = line.split(',')
+            if lastid >= START_MID and lastid <= END_MID:
+                movie_vectors[lastid][int(uid)] = int(rating)
+    return movie_vectors
 
 
 def fuzz_plot(xs, ys):
+    """
+    Make scatter plot where coordinates are fuzzed up a bit (useful when
+    estimating densities for data points with discrete values.
+
+    """
     pylab.scatter([x+random.random()-0.5 for x in xs],
                   [y+random.random()-0.5 for y in ys])
     pylab.show()
