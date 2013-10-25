@@ -22,13 +22,13 @@ from collections import defaultdict
 
 import cosine_nn
 
-START_MID, END_MID = 1, 500
+START_MID, END_MID = 1, 3000
 MOVIE_IDS = range(START_MID, END_MID+1)
 USER_IDS = None
 
 WORK_DIR = '..'
-TRAINING_SET = 'noprobe/training_med'
-CACHE = 'cache'
+TRAINING_SET = 'noprobe/training_set'
+CACHE = '/Users/goldy/tmp/cache'
 
 UNCLUSTERED = -1
 NOISE = -2
@@ -61,26 +61,26 @@ def index_by_users():
     print 'NN setup complete. beginning indexing...'
     # Add all movies to nn_index
     for i, uid in enumerate(user_ids):
-        col = iindex[uid]
+        col = iindex[uid].uratings
         nn_index.index(uid, col)
         print i/float(len(user_ids)), uid
     print 'indexing and setup complete'
 
-    t = prettytable.PrettyTable(['id', 'name', 'closest', 'dist'])
+    # t = prettytable.PrettyTable(['id', 'name', 'closest', 'dist'])
 
-    uid = user_ids[0]
-    eps = 1 - np.cos(1/2.0 * np.pi)
-    print 'done'
-    for i, uid in enumerate(user_ids):
-        neighbours = nn_index.find_neighbours(uid, eps)
-        print i / float(len(user_ids))#, len(neighbours) / float(len(nn_index.query(uid)))
-        by_dist = sorted(neighbours, key=lambda nuid: nn_index.cosine_dist_between(uid, nuid))
-        t.add_row([
-            uid,
-            0,
-            by_dist[0] if by_dist else '-',
-            np.degrees(np.arccos(1 - nn_index.cosine_dist_between(by_dist[0], uid))) if by_dist else '-'
-        ])
+    # uid = user_ids[0]
+    # eps = 1 - np.cos(1/2.0 * np.pi)
+    # print 'done'
+    # for i, uid in enumerate(user_ids):
+    #     neighbours = nn_index.find_neighbours(uid, eps)
+    #     print i / float(len(user_ids))#, len(neighbours) / float(len(nn_index.query(uid)))
+    #     by_dist = sorted(neighbours, key=lambda nuid: nn_index.cosine_dist_between(uid, nuid))
+    #     t.add_row([
+    #         uid,
+    #         0,
+    #         by_dist[0] if by_dist else '-',
+    #         np.degrees(np.arccos(1 - nn_index.cosine_dist_between(by_dist[0], uid))) if by_dist else '-'
+    #     ])
 
     # List of (mid, uid) from probe that we have to predict
     probe_ratings = read_probe()
@@ -89,22 +89,50 @@ def index_by_users():
     for mid, mratings in probe_ratings.iteritems():
         for uid, rating in mratings.iteritems():
             if uid in user_ids:
-                to_predict.append((uid, mid))
+                to_predict.append((uid, mid, rating))
 
-    for uid, mid in to_predict:
-        guess_rating(nn_index, iindex, uid, mid)
+    errors = []
+    for uid, mid, actual in to_predict:
+        guess = guess_rating(nn_index, iindex, uid, mid)
+        #1.29 with guess=3
+        #1.04 with their average
+        #1.02 with knn
+        # guess = 3
+        errors.append((guess - actual)**2)
+    print np.sqrt(np.mean(errors))
 
 
 def guess_rating(nn_index, iindex, uid, mid):
     """Guess NORMALISED rating. You should scale this by uid's mean and std."""
     eps = 1 - np.cos(1/2.0 * np.pi)
     neighbours = nn_index.find_neighbours(uid, eps)
-    neighbour_ratings = []
-    for nuid in neighbours:
-        neighbour_rating = iindex[nuid][mid, 0]
+    num_neighbours_considered = 0
+    sum_inv_cosdist = sum(1.0/cosdist for (nuid, cosdist) in neighbours)
+    weighted_mean = 0
+    for (nuid, cosdist) in neighbours:
+        neighbour_rating = iindex[nuid].uratings[mid, 0]
         if neighbour_rating != 0:  # Ignore non-ratings
-            neighbour_ratings.append(neighbour_rating)
-    return np.mean(neighbour_ratings) if neighbour_ratings else 0
+            # Scales contribution of closer neighbours higher.
+            # e.g. if there are only two neighbours of distance 60deg, 90deg,
+            # the 60deg neighbour contributes 66%, the 90deg contributes 33%
+            # weighted_mean = neighbour_rating * invcosdist/sum_inv_cosdist
+            #               = neighbour_rating * (1/cosdist)/sum_inv_cosdist
+            #               = neighbour_rating / (cosdist*sum_inv_cosdist)
+            num_neighbours_considered += 1
+            weighted_mean += neighbour_rating / (cosdist*sum_inv_cosdist)
+
+    # bug()
+    # guess = 0
+    # # Now calculate the guess based on the neighbour average, uid's mean and std
+    # Order of *, + MATTERS here! Opposite order of normalisation
+    guess = weighted_mean
+    guess *= iindex[uid].std
+    guess += iindex[uid].mean
+
+    # Put it in the actual range of possible ratings (e.g. don't guess -1)
+    guess = min(max(guess, 1), 5)
+    print 'guessing', guess, 'based on', num_neighbours_considered, 'mean is', iindex[uid].mean, 'std', iindex[uid].std
+    return guess
 
 
 def find_neighbours_for_each():
@@ -280,7 +308,7 @@ def cached(f):
     name = '{}_{}-{}_{}_cache.pkl'.format(f.__name__, START_MID,
                                            END_MID, TRAINING_SET)
     name = name.replace('/', '_slash_')
-    fpath = os.path.join(WORK_DIR, CACHE, name)
+    fpath = os.path.join(CACHE, name)
     def writeToCache(data):
         with open(fpath, 'wb') as fout:
             cPickle.dump(data, fout)
@@ -360,6 +388,14 @@ def get_user_normalised_ratings():
     return ratings
 
 
+class InverseIndexEntry(object):
+    __slots__ = ('mean', 'std', 'uratings')
+
+    def __init__(self, mean, std, uratings):
+        self.mean = mean
+        self.std = std
+        self.uratings = uratings
+
 def get_normalised_inverse_index(movie_ratings):
     """
     A dict of userid : sparse.csr_matrix]. The ith element of the sparse row is the
@@ -389,7 +425,7 @@ def get_normalised_inverse_index(movie_ratings):
 
         if (len(set(uratings)) > 1 and
             len(uratings) > 10):  # if our sparsified vector is interesting
-            iindex[uid] = sparsified
+            iindex[uid] = InverseIndexEntry(umean, ustddev, sparsified)
 
     return iindex
 

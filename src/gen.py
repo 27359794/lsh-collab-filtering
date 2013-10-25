@@ -1,11 +1,12 @@
 from collections import defaultdict
+import os
 
-root = '../'
-training_set = 'training_med'
+root = '..'
+training_set = 'training_set'
 
-MIDS = range(1, 17771)
+MIDS = range(1, 3001)
 
-f = open(root + 'probe.txt')
+f = open(os.path.join(root, 'probe.txt'))
 probe = defaultdict(list)
 mid = None
 for line in f:
@@ -15,7 +16,7 @@ for line in f:
         uid = int(line)
         probe[mid].append(uid)
 
-w = open(root + 'probe_rated.txt', 'w')
+w = open(os.path.join(root, 'probe_rated_{}_{}.txt'.format(training_set, len(MIDS))), 'w')
 
 for mid in MIDS:
     name = 'mv_{:0>7}.txt'.format(mid)
@@ -23,8 +24,8 @@ for mid in MIDS:
     if mid in probe:
         w.write('%d:\n' % mid)
 
-    f = open(root + training_set + '/' + name)
-    tf = open(root + 'noprobe/' + training_set + '/' + name, 'w')
+    f = open(os.path.join(root, training_set, name))
+    tf = open(os.path.join(root, 'noprobe', training_set, name), 'w')
     tf.write(f.readline())
     for line in f:
         u, r, _ = line.split(',')

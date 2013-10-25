@@ -61,7 +61,7 @@ import ipdb; bug = ipdb.set_trace
 #20: 53s
 class CosineNN(object):
     BLOCK_SIZE = 13# 12
-    NUM_BLOCKS = 70#330
+    NUM_BLOCKS = 100#330
     SIG_LENGTH = BLOCK_SIZE * NUM_BLOCKS
 
     def __init__(self, vector_len):
@@ -102,21 +102,20 @@ class CosineNN(object):
 
     def find_neighbours(self, mid, eps):
         """
-        Returns a set of IDs to neighbours of object with id `mid'. All
-        neighbours nmid have cosine-dist(mid, nmid) <= eps.
-        Does NOT return mid as one of the results.
+        Returns a set of (id,cosdist) to neighbours of object with id `mid'. All
+        neighbours nmid have cosine-dist(mid, nmid) <= eps. Does NOT return mid
+        as one of the results.
 
         This is an exact version of query(). Precision guaranteed 100%.
-        Recall is the same as the recall of query(). Also significantly slower
-        because it computes all the cosines.
+        Recall is the same as the recall of query(). Also slower because it
+        computes all the cosines.
 
         """
         maybe_neighbours = self.query(mid)
-        actual_neighbours = {nmid for nmid in maybe_neighbours
-                             if self.cosine_dist_between(mid, nmid) <= eps and
-                             nmid != mid}
+        with_dist = [(nmid, self.cosine_dist_between(mid, nmid))
+                     for nmid in maybe_neighbours if nmid != mid]
+        actual_neighbours = filter(lambda (nmid, cosd): cosd<=eps, with_dist)
         return actual_neighbours
-        # return maybe_neighbours
 
 
     def extract_block(self, sig, block_num):
