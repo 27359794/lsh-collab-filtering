@@ -54,14 +54,10 @@ import scipy.spatial
 import doctest
 import ipdb; bug = ipdb.set_trace
 
-#7:2min
-#11:47s
-#13: 42s
-#15: 44s
-#20: 53s
+
 class CosineNN(object):
-    BLOCK_SIZE = 13# 12
-    NUM_BLOCKS = 100#330
+    BLOCK_SIZE = 13
+    NUM_BLOCKS = 50
     SIG_LENGTH = BLOCK_SIZE * NUM_BLOCKS
 
     def __init__(self, vector_len):
@@ -114,8 +110,8 @@ class CosineNN(object):
         maybe_neighbours = self.query(mid)
         with_dist = [(nmid, self.cosine_dist_between(mid, nmid))
                      for nmid in maybe_neighbours if nmid != mid]
-        actual_neighbours = filter(lambda (nmid, cosd): cosd<=eps, with_dist)
-        return actual_neighbours
+        # actual_neighbours = filter(lambda (nmid, cosd): cosd<=eps, with_dist)
+        return with_dist
 
 
     def extract_block(self, sig, block_num):

@@ -1,10 +1,11 @@
 from collections import defaultdict
+import sys
 import os
 
 root = '..'
 training_set = 'training_set'
 
-MIDS = range(1, 3001)
+MIDS = range(1, int(sys.argv[1])+1)
 
 f = open(os.path.join(root, 'probe.txt'))
 probe = defaultdict(list)

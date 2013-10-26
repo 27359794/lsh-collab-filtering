@@ -22,12 +22,12 @@ from collections import defaultdict
 
 import cosine_nn
 
-START_MID, END_MID = 1, 3000
+START_MID, END_MID = 1, 500
 MOVIE_IDS = range(START_MID, END_MID+1)
 USER_IDS = None
 
 WORK_DIR = '..'
-TRAINING_SET = 'noprobe/training_set'
+TRAINING_SET = 'noprobe/training_med'
 CACHE = '/Users/goldy/tmp/cache'
 
 UNCLUSTERED = -1
@@ -63,7 +63,8 @@ def index_by_users():
     for i, uid in enumerate(user_ids):
         col = iindex[uid].uratings
         nn_index.index(uid, col)
-        print i/float(len(user_ids)), uid
+        if i % 10 == 0:
+            print i/float(len(user_ids)), uid
     print 'indexing and setup complete'
 
     # t = prettytable.PrettyTable(['id', 'name', 'closest', 'dist'])
@@ -92,7 +93,8 @@ def index_by_users():
                 to_predict.append((uid, mid, rating))
 
     errors = []
-    for uid, mid, actual in to_predict:
+    for i, (uid, mid, actual) in enumerate(to_predict):
+        print i / float(len(to_predict))
         guess = guess_rating(nn_index, iindex, uid, mid)
         #1.29 with guess=3
         #1.04 with their average
@@ -107,21 +109,26 @@ def guess_rating(nn_index, iindex, uid, mid):
     eps = 1 - np.cos(1/2.0 * np.pi)
     neighbours = nn_index.find_neighbours(uid, eps)
     num_neighbours_considered = 0
-    sum_inv_cosdist = sum(1.0/cosdist for (nuid, cosdist) in neighbours)
+    sum_inv_cosdist = 0
     weighted_mean = 0
+    wasted = 0
     for (nuid, cosdist) in neighbours:
+        assert nuid != uid
+        if cosdist > eps:
+            wasted += 1
         neighbour_rating = iindex[nuid].uratings[mid, 0]
         if neighbour_rating != 0:  # Ignore non-ratings
             # Scales contribution of closer neighbours higher.
             # e.g. if there are only two neighbours of distance 60deg, 90deg,
             # the 60deg neighbour contributes 66%, the 90deg contributes 33%
-            # weighted_mean = neighbour_rating * invcosdist/sum_inv_cosdist
-            #               = neighbour_rating * (1/cosdist)/sum_inv_cosdist
-            #               = neighbour_rating / (cosdist*sum_inv_cosdist)
             num_neighbours_considered += 1
-            weighted_mean += neighbour_rating / (cosdist*sum_inv_cosdist)
+            #  55566 'contr', neighbour_rating, cosdist, neighbour_rating / cosdist, 1/cosdist
+            weighted_mean += neighbour_rating / cosdist
+            sum_inv_cosdist += 1/cosdist
+    print 'before div', weighted_mean, sum_inv_cosdist
+    weighted_mean /= (sum_inv_cosdist if sum_inv_cosdist else 1)
+    print 'weighted mean', weighted_mean
 
-    # bug()
     # guess = 0
     # # Now calculate the guess based on the neighbour average, uid's mean and std
     # Order of *, + MATTERS here! Opposite order of normalisation
@@ -131,7 +138,7 @@ def guess_rating(nn_index, iindex, uid, mid):
 
     # Put it in the actual range of possible ratings (e.g. don't guess -1)
     guess = min(max(guess, 1), 5)
-    print 'guessing', guess, 'based on', num_neighbours_considered, 'mean is', iindex[uid].mean, 'std', iindex[uid].std
+    print 'guessing', guess, 'based on', num_neighbours_considered, 'of', wasted+num_neighbours_considered, 'mean is', iindex[uid].mean, 'std', iindex[uid].std
     return guess
 
 
@@ -315,16 +322,18 @@ def cached(f):
         return data
 
     def helper(*args):
-        assert not args  # This doesn't cache funcs with arguments
+        if args:
+            print "WARNING: shouldn't use @cached on funcs with args!"
+        # assert not args  # This doesn't cache funcs with arguments
 
         if not os.path.exists(fpath):
-            return writeToCache(f())
+            return writeToCache(f(*args))
         else:
             try:
                 print 'reading', f.__name__, 'from cache'
                 return cPickle.load(open(fpath, 'rb'))
             except EOFError:
-                return writeToCache(f())
+                return writeToCache(f(*args))
 
     return helper
 
@@ -389,13 +398,14 @@ def get_user_normalised_ratings():
 
 
 class InverseIndexEntry(object):
-    __slots__ = ('mean', 'std', 'uratings')
+    # __slots__ = ('mean', 'std', 'uratings')
 
     def __init__(self, mean, std, uratings):
         self.mean = mean
         self.std = std
         self.uratings = uratings
 
+@cached
 def get_normalised_inverse_index(movie_ratings):
     """
     A dict of userid : sparse.csr_matrix]. The ith element of the sparse row is the
