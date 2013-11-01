@@ -1,4 +1,9 @@
 """
+cosine_nn.py
+Daniel Goldbach
+
+Nearest-neighbour data structure using cosine similarity.
+
 m is a neighbour of n if the angle between m and n is less than a.
 
 We are querying for neighbours of n. m is an arbitrary element in the space
