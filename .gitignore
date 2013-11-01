@@ -1,4 +1,4 @@
 cache
-noprobeset
+noprobe
 training_*
 *.pyc
