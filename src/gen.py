@@ -1,3 +1,15 @@
+"""
+gen.py
+Daniel Goldbach
+
+Generates training and test sets from the Netflix challenge data. The test set
+contains data from the probe set. The challenge data combines all ratings into
+the training set, which doesn't make sense to me. Better to have a clear
+separation between training and test data.
+
+"""
+
+
 from collections import defaultdict
 import sys
 import os

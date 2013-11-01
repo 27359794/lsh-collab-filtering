@@ -56,8 +56,8 @@ import ipdb; bug = ipdb.set_trace
 
 
 class CosineNN(object):
-    BLOCK_SIZE = 13
-    NUM_BLOCKS = 50
+    BLOCK_SIZE = 16
+    NUM_BLOCKS = 500
     SIG_LENGTH = BLOCK_SIZE * NUM_BLOCKS
 
     def __init__(self, vector_len):

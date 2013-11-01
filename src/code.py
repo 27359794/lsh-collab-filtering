@@ -1,49 +1,33 @@
 """
-Incomplete working script. Implementing bits and pieces for CF.
-training_med: U = ~15000 users
+code.py
+Author: Daniel Goldbach
+
+Run collaborative filtering on Netflix challenge dataset and output RMSE.
 """
 
-
 import cPickle
-import ipdb; bug = ipdb.set_trace
-import itertools
-import os
-import prettytable
-import pylab
-import random
-import scipy.sparse
-import sklearn.metrics
-import time
-
 import numpy as np
-import scipy.stats as stats
-
+import os
+import scipy.sparse
 from collections import defaultdict
 
 import cosine_nn
 
-START_MID, END_MID = 1, 500
+START_MID, END_MID = 1, 1000
 MOVIE_IDS = range(START_MID, END_MID+1)
 USER_IDS = None
 
 WORK_DIR = '..'
 TRAINING_SET = 'noprobe/training_med'
-CACHE = '/Users/goldy/tmp/cache'
+RATED_PROBE_FN = 'probe_rated.txt'
+CACHE = os.path.join(WORK_DIR, 'cache')
 
 UNCLUSTERED = -1
 NOISE = -2
 
 
 def main():
-    # find_neighbours_for_each()
     index_by_users()
-
-    # Require angle < 72deg
-    # eps = 1-np.cos(3/7.0 * np.pi)# 1 - np.cos(2/5.0 * np.pi)
-    # min_pts = 8
-    # dbscan_parameter_est(min_pts)
-    # dbscan(eps, min_pts)
-
 
 
 def index_by_users():
@@ -67,23 +51,6 @@ def index_by_users():
             print i/float(len(user_ids)), uid
     print 'indexing and setup complete'
 
-    # t = prettytable.PrettyTable(['id', 'name', 'closest', 'dist'])
-
-    # uid = user_ids[0]
-    # eps = 1 - np.cos(1/2.0 * np.pi)
-    # print 'done'
-    # for i, uid in enumerate(user_ids):
-    #     neighbours = nn_index.find_neighbours(uid, eps)
-    #     print i / float(len(user_ids))#, len(neighbours) / float(len(nn_index.query(uid)))
-    #     by_dist = sorted(neighbours, key=lambda nuid: nn_index.cosine_dist_between(uid, nuid))
-    #     t.add_row([
-    #         uid,
-    #         0,
-    #         by_dist[0] if by_dist else '-',
-    #         np.degrees(np.arccos(1 - nn_index.cosine_dist_between(by_dist[0], uid))) if by_dist else '-'
-    #     ])
-
-    # List of (mid, uid) from probe that we have to predict
     probe_ratings = read_probe()
 
     to_predict = []
@@ -96,12 +63,8 @@ def index_by_users():
     for i, (uid, mid, actual) in enumerate(to_predict):
         print i / float(len(to_predict))
         guess = guess_rating(nn_index, iindex, uid, mid)
-        #1.29 with guess=3
-        #1.04 with their average
-        #1.02 with knn
-        # guess = 3
         errors.append((guess - actual)**2)
-    print np.sqrt(np.mean(errors))
+    print 'RMSE:', np.sqrt(np.mean(errors))
 
 
 def guess_rating(nn_index, iindex, uid, mid):
@@ -122,14 +85,12 @@ def guess_rating(nn_index, iindex, uid, mid):
             # e.g. if there are only two neighbours of distance 60deg, 90deg,
             # the 60deg neighbour contributes 66%, the 90deg contributes 33%
             num_neighbours_considered += 1
-            #  55566 'contr', neighbour_rating, cosdist, neighbour_rating / cosdist, 1/cosdist
             weighted_mean += neighbour_rating / cosdist
             sum_inv_cosdist += 1/cosdist
     print 'before div', weighted_mean, sum_inv_cosdist
     weighted_mean /= (sum_inv_cosdist if sum_inv_cosdist else 1)
     print 'weighted mean', weighted_mean
 
-    # guess = 0
     # # Now calculate the guess based on the neighbour average, uid's mean and std
     # Order of *, + MATTERS here! Opposite order of normalisation
     guess = weighted_mean
@@ -138,177 +99,10 @@ def guess_rating(nn_index, iindex, uid, mid):
 
     # Put it in the actual range of possible ratings (e.g. don't guess -1)
     guess = min(max(guess, 1), 5)
-    print 'guessing', guess, 'based on', num_neighbours_considered, 'of', wasted+num_neighbours_considered, 'mean is', iindex[uid].mean, 'std', iindex[uid].std
+    print ('guessing', guess, 'based on', num_neighbours_considered, 'of',
+        wasted+num_neighbours_considered, 'mean is', iindex[uid].mean,
+        'std', iindex[uid].std)
     return guess
-
-
-def find_neighbours_for_each():
-    movie_vecs = get_user_normalised_ratings()
-    movie_names = get_movie_names()
-    viewer_set = {mi: set(movie_vecs[mi].keys()) for mi in MOVIE_IDS}
-    user_ids = list(set.union(*viewer_set.itervalues()))
-
-    min_degrees = 78.0
-    eps = 1 - np.cos(np.radians(min_degrees))
-
-    print '{} users, RVF size is {}'.format(
-            len(user_ids), len(user_ids)*cosine_nn.CosineNN.BLOCK_SIZE*cosine_nn.CosineNN.NUM_BLOCKS)
-
-    nn_index = cosine_nn.CosineNN(len(user_ids))
-
-    print 'NN setup complete. beginning indexing...'
-    # Add all movies to nn_index
-    for mid in MOVIE_IDS:
-        col = np.fromiter(
-            ((movie_vecs[mid][u] if u in viewer_set[mid] else 0) for u in user_ids),
-            int)
-        nn_index.index(mid, col)
-    print 'indexing and setup complete'
-
-    t = prettytable.PrettyTable(['id', 'name', 'closest', 'dist'])
-
-    for mid in MOVIE_IDS:
-        # demand neighbours inside 72deg
-        neighbours = nn_index.query(mid) - set([mid])
-        by_dist = sorted(neighbours, key=lambda nmid: nn_index.cosine_dist_between(mid, nmid))
-        t.add_row([
-            mid,
-            dotdot(movie_names[mid]),
-            dotdot(movie_names[by_dist[0]]) if by_dist else '-',
-            np.degrees(np.arccos(1 - nn_index.cosine_dist_between(by_dist[0], mid))) if by_dist else '-'
-        ])
-    print t
-
-def dotdot(s):
-    lim = 35
-    return s if len(s)<lim else s[:lim-3] + '...'
-
-
-def dbscan_parameter_est(min_pts):
-    movie_vecs = get_user_normalised_ratings()
-    movie_names = get_movie_names()
-    viewer_set = {mi: set(movie_vecs[mi].keys()) for mi in MOVIE_IDS}
-    user_ids = list(set.union(*viewer_set.itervalues()))
-    visited = set()
-
-    print 'beginning dbscan. {} users, RVF size is {}'.format(
-            len(user_ids), len(user_ids)*cosine_nn.CosineNN.BLOCK_SIZE*cosine_nn.CosineNN.NUM_BLOCKS)
-
-    nn_index = cosine_nn.CosineNN(len(user_ids))
-
-    print 'NN setup complete. beginning indexing...'
-    # Add all movies to nn_index
-    for mid in MOVIE_IDS:
-        col = np.fromiter(
-            ((movie_vecs[mid][u] if u in viewer_set[mid] else 0) for u in user_ids),
-            int)
-        nn_index.index(mid, col)
-    print 'indexing and setup complete'
-
-    scatters = []
-
-    for mid in MOVIE_IDS:
-        # find 4-neighbourhood
-        neighbours = nn_index.find_neighbours(mid, 999)  # eps=inf -- don't filter
-        by_dist = []
-        for nmid in neighbours:
-            if nmid != mid:
-                by_dist.append((nn_index.cosine_dist_between(mid, nmid), nmid))
-        by_dist.sort()
-
-        k = 8
-        if len(by_dist) >= k:
-            scatters.append(by_dist[k][0])
-    scatters.sort(reverse=True)
-    pylab.plot(scatters)
-    pylab.show()
-
-
-def dbscan(eps, min_pts):
-    """
-    for each unvisited point in dataset:
-        mark as visited
-        regionquery point
-        if not enough points in region:
-            mark as noise
-        else:
-            find cluster around point
-
-    """
-    movie_vecs = get_user_normalised_ratings()
-    movie_names = get_movie_names()
-    viewer_set = {mi: set(movie_vecs[mi].keys()) for mi in MOVIE_IDS}
-    user_ids = list(set.union(*viewer_set.itervalues()))
-    visited = set()
-
-    print 'beginning dbscan. {} users, RVF size is {}'.format(
-            len(user_ids), len(user_ids)*cosine_nn.CosineNN.BLOCK_SIZE*cosine_nn.CosineNN.NUM_BLOCKS)
-
-    nn_index = cosine_nn.CosineNN(len(user_ids))
-
-    cluster_ids = {mid: UNCLUSTERED for mid in MOVIE_IDS}
-    cur_cluster_id = 0
-
-    print 'NN setup complete. beginning indexing...'
-
-    # Add all movies to nn_index
-    for mid in MOVIE_IDS:
-        col = np.fromiter(
-            ((movie_vecs[mid][u] if u in viewer_set[mid] else 0) for u in user_ids),
-            int)
-        nn_index.index(mid, col)
-
-    print 'indexing and setup complete'
-
-    for mid in MOVIE_IDS:
-        if mid in visited:
-            continue
-        visited.add(mid)
-
-        neighbours = nn_index.find_neighbours(mid, eps)
-        if len(neighbours) < min_pts:
-            cluster_ids[mid] = NOISE
-        else:
-            expand_cluster(mid, neighbours, visited, nn_index,
-                           cur_cluster_id, cluster_ids, eps, min_pts)
-            cur_cluster_id += 1
-
-    assert cluster_ids.values().count(UNCLUSTERED) == 0, 'all points visited'
-    print 'NOISE:', cluster_ids.values().count(NOISE)
-    print 'TOTAL', len(cluster_ids)
-
-    for cluster_id in xrange(0, cur_cluster_id):
-        print '-' * 100
-        ms = {mid for (mid, cid) in cluster_ids.iteritems() if cid == cluster_id}
-        for mid in ms:
-            print movie_names[mid]
-        cosine_pairs = [nn_index.cosine_dist_between(mida, midb)
-                        for (mida, midb) in itertools.combinations(ms, 2)]
-        print 'AVERAGE COSINE SIMILARITY OF CLUSTER MEMBERS:', np.mean(cosine_pairs)
-
-    random_mids = random.sample(MOVIE_IDS, min(len(MOVIE_IDS), 100))  # Without replacement
-    cosine_pairs = [nn_index.cosine_dist_between(mida, midb)
-                    for (mida, midb) in itertools.combinations(random_mids, 2)]
-
-    cosine_pairs = np.compress(~np.isnan(cosine_pairs), cosine_pairs)
-    print 'AVERAGE COSINE SIMILARITY OF CONTROL GROUP:', stats.nanmean(cosine_pairs)
-
-
-
-def expand_cluster(mid, neighbours, visited, nn_index,
-                   cur_cluster_id, cluster_ids, eps, min_pts):
-    cluster_ids[mid] = cur_cluster_id
-    stack = neighbours  # this is a set
-    while stack:
-        cur_pt = stack.pop()  # cur_pt is a movie ID
-        if cur_pt not in visited:
-            visited.add(cur_pt)
-            next_neighbours = nn_index.find_neighbours(cur_pt, eps)
-            if len(next_neighbours) >= min_pts:
-                stack.update(next_neighbours)
-        if cluster_ids[cur_pt] in [UNCLUSTERED, NOISE]:
-            print 'assigning to', cur_cluster_id
-            cluster_ids[cur_pt] = cur_cluster_id
 
 
 def cached(f):
@@ -323,9 +117,7 @@ def cached(f):
 
     def helper(*args):
         if args:
-            print "WARNING: shouldn't use @cached on funcs with args!"
-        # assert not args  # This doesn't cache funcs with arguments
-
+            print "WARNING: probably shouldn't use @cached on funcs with args!"
         if not os.path.exists(fpath):
             return writeToCache(f(*args))
         else:
@@ -341,7 +133,7 @@ def cached(f):
 @cached
 def read_probe():
     """A list whose ith element is a dict {user: rating} for movie i."""
-    f = open(os.path.join(WORK_DIR, 'probe_rated.txt'))
+    f = open(os.path.join(WORK_DIR, RATED_PROBE_FN))
     movie_vectors = {}
     d = {}
     lastid = None
@@ -357,17 +149,6 @@ def read_probe():
     return movie_vectors
 
 
-def fuzz_plot(xs, ys):
-    """
-    Make scatter plot where coordinates are fuzzed up a bit (useful when
-    estimating densities for data points with discrete values.
-
-    """
-    pylab.scatter([x+random.random()-0.5 for x in xs],
-                  [y+random.random()-0.5 for y in ys])
-    pylab.show()
-
-
 @cached
 def get_user_normalised_ratings():
     """
@@ -379,8 +160,6 @@ def get_user_normalised_ratings():
     print 'read raw ratings...'
     iindex = inverse_index(ratings)
 
-    pylab.hist(map(len, iindex.values()))
-    pylab.show()
     print 'built inverse index...'
     user_stats = {}  # userid -> (mean, stddev)
     for u, uvec in iindex.iteritems():
@@ -449,7 +228,6 @@ def inverse_index(movie_ratings):
     return user_index
 
 
-
 @cached
 def get_movie_ratings():
     """A list whose ith element is a dict {user: rating} for movie i."""
@@ -458,8 +236,6 @@ def get_movie_ratings():
     movie_vectors = [-1337] + [{} for _ in range(END_MID+1)]
     for i, fn in movie_filenames:
         f = open(os.path.join(WORK_DIR, TRAINING_SET, fn))
-        # fo = open('training_med/' + fn, 'w')
-        # fo.write(f.readline())  # Ignore first line, which contains "id:"
         f.readline()
         d = {}
 
@@ -471,6 +247,7 @@ def get_movie_ratings():
     print 'loaded ratings from training data'
     return movie_vectors
 
+
 @cached
 def get_movie_names():
     """A dictionary of movie id to movie name."""
@@ -480,6 +257,6 @@ def get_movie_names():
         movie_names[int(i)] = name
     return movie_names
 
+
 if __name__ == '__main__':
-    import doctest; doctest.testmod()
     main()
