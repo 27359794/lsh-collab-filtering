@@ -101,21 +101,17 @@ class CosineNN(object):
         return resultset
 
 
-    def find_neighbours(self, mid, eps):
+    def query_with_dist(self, mid, eps):
         """
-        Returns a set of (id,cosdist) to neighbours of object with id `mid'. All
-        neighbours nmid have cosine-dist(mid, nmid) <= eps. Does NOT return mid
-        as one of the results.
+        Returns a set of (id,cosdist) to potential neighbours of object with id
+        `mid'. Does NOT return mid as one of the results.
 
-        This is an exact version of query(). Precision guaranteed 100%.
-        Recall is the same as the recall of query(). Also slower because it
-        computes all the cosines.
+        Slower than query() because it computes all the cosines.
 
         """
         maybe_neighbours = self.query(mid)
         with_dist = [(nmid, self.cosine_dist_between(mid, nmid))
                      for nmid in maybe_neighbours if nmid != mid]
-        # actual_neighbours = filter(lambda (nmid, cosd): cosd<=eps, with_dist)
         return with_dist
 
 
