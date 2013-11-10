@@ -14,10 +14,10 @@ Requirements
 Instructions
 ------------
 
-1. Unzip the contents of `data.zip` into the root directory. There should now be files `movie_titles.txt`, `probe.txt` and folders `training_set`, `training_med` in the root directory.
+1. Unzip the contents of compressed file `data.(zip|7z)` into the root directory. There should now be files `movie_titles.txt`, `probe.txt` and folders `training_set`, `training_med` in the root directory.
 2. `cd` to `src/`
 3. Run `python gen.py` with appropriate command line arguments to generate disjoint training and test sets. `python gen.py -h` gives further information.
-4. Run `python code.py`. This will create the nearest neighbour data structure using the training set you generated in the previous command, then it will attempt to predict ratings for test set users and calculate the error.
+4. Run `python main.py` with appropriate command line arguments (`-h` flag for help). This will create the nearest neighbour data structure using the training set you generated in the previous command, then it will attempt to predict ratings for test set users and calculate the error.
 5. The last line printed by the script is the RMSE on the probe set.
 
 The *k,l* parameters described in the report can be configured in `src/cosine_nn.py`.
