@@ -2,10 +2,11 @@
 gen.py
 Daniel Goldbach
 
-Generates disjoint training and test sets from the Netflix challenge data. The
-test set contains data from Netflix's probe set. The original challenge data
-combines all ratings into the training set, which doesn't make sense to me.
-Better to have a clear separation between training and test data.
+Generates disjoint and nicely formatted training and test sets from the Netflix
+challenge data. The test set contains data from Netflix's probe set. The
+original challenge data combines all ratings into the training set, which
+doesn't make sense to me. Better to have a clear separation between training and
+test data.
 
 """
 
@@ -36,7 +37,7 @@ def generate(mids, training_set):
             w.write('%d:\n' % mid)
 
         f = open(os.path.join(ROOT, training_set, name))
-        tf = open(os.path.join(ROOT, 'noprobe', training_set, name), 'w')
+        tf = open(os.path.join(ROOT, 'no_probe_set/', name), 'w')
         tf.write(f.readline()) # first line contains movie ID then ':'
         for line in f:
             u, r, _ = line.split(',')
@@ -55,7 +56,7 @@ if __name__ == '__main__':
     parser.add_argument(
         'num_movies',
         type=int,
-        help='the number of movies in the dataset to process. 1 <= M <= 17770.')
+        help='the number of movies to include in the datasets. 1 <= num_movies <= 17770.')
     parser.add_argument(
         '-f', '--fulldataset',
         action='store_true',
@@ -66,3 +67,5 @@ if __name__ == '__main__':
     movie_ids = range(1, args.num_movies + 1)
 
     generate(movie_ids, training_set_fn)
+
+    print 'successfully generated datasets.'

@@ -50,14 +50,12 @@ OR gate of AND gates: 1 - (1 - (1 - 1/3.0)**a)**o, 1 - (1 - (1 - 1/2.0)**a)**o
 a,o = 7,60
 Out[78]: (0.9731803062239186, 0.37536677884638525)
 
-
 """
 
 import numpy as np
 from collections import defaultdict
 import scipy.spatial
 import doctest
-import ipdb; bug = ipdb.set_trace
 
 
 class CosineNN(object):
@@ -88,10 +86,9 @@ class CosineNN(object):
 
     def query(self, mid):
         """
-        Time complexity of this function is slightly weird. It's something
-        like O(p_2*M + p_1*result) with plenty of overhead, where p_1, p_2 are
-        the probability values of the (d_1, d_2, p_1, p_2) hash family in use.
-
+        Time complexity of this function is slightly weird. It's something like
+        O(p_2*M + p_1*result) with plenty of overhead, where p_1, p_2 are the
+        probability values of the (d_1, d_2, p_1, p_2) hash family in use.
         """
         sig = self.signatures[mid]
         resultset = set()
@@ -101,13 +98,12 @@ class CosineNN(object):
         return resultset
 
 
-    def query_with_dist(self, mid, eps):
+    def query_with_dist(self, mid):
         """
         Returns a set of (id,cosdist) to potential neighbours of object with id
         `mid'. Does NOT return mid as one of the results.
 
         Slower than query() because it computes all the cosines.
-
         """
         maybe_neighbours = self.query(mid)
         with_dist = [(nmid, self.cosine_dist_between(mid, nmid))
@@ -124,8 +120,8 @@ class CosineNN(object):
     def signature_of(self, vec):
         """Takes a numpy vector of length U and produces its LSH."""
         sketch = self.random_vector_family * vec  # This is a matrix product
-        # bug()
         num = 0
+        # TODO: find a way of vectorising this loop.
         for i in xrange(CosineNN.SIG_LENGTH):
             if sketch[i,0] >= 0:
                 num |= (1 << i)
@@ -133,6 +129,8 @@ class CosineNN(object):
 
     def nxor_count_bits(self, a, b):
         """
+        Count the number of bits that differ between two integers.
+
         >>> nxor_count_bits(0b1011, 0b1010)
         1
         >>> nxor_count_bits(0b10, 0b1)
@@ -142,15 +140,17 @@ class CosineNN(object):
         """
         x = 1
         num_set = 0
-        for _ in xrange(SIG_LENGTH):
+        for _ in xrange(CosineNN.SIG_LENGTH):
             num_set += ((a&x)>0) != ((b&x)>0)
             x <<= 1
         return num_set
 
     def cosine_dist_between(self, mid1, mid2):
+        """Calculates exact cosine DISTANCE i.e. 1 - cosine similarity."""
         # Requires .todense() or else 'dimension missmatch'
         return scipy.spatial.distance.cosine(self.col_vecs[mid1].todense(),
                                              self.col_vecs[mid2].todense())
+
 
 if __name__ == '__main__':
     doctest.testmod()

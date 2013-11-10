@@ -3,8 +3,13 @@ code.py
 Author: Daniel Goldbach
 
 Run collaborative filtering on Netflix challenge dataset and output RMSE.
+
+For quicker debugging time, uncomment the @cached decorations above functions
+that can be cached.
+
 """
 
+import argparse
 import cPickle
 import numpy as np
 import os
@@ -13,30 +18,35 @@ from collections import defaultdict
 
 import cosine_nn
 
-
-START_MID, END_MID = 1, 1000
-MOVIE_IDS = range(START_MID, END_MID+1)
+# These are assigned at the bottom based on CL args
+# TODO: shouldn't be constants...
+START_MID, END_MID = None, None
+MOVIE_IDS = None
 
 WORK_DIR = '..'
-TRAINING_SET = 'noprobe/training_med'
+TRAINING_SET = 'no_probe_set/'
 RATED_PROBE_FN = 'probe_rated.txt'
 CACHE = os.path.join(WORK_DIR, 'cache')
 
 
 def main():
-    index_by_users()
+    index_and_evaluate()
 
 
+# TODO: replace class w/ named tuple from collections
 class InverseIndexEntry(object):
-    __slots__ = ('mean', 'std', 'uratings')
-
+    """
+    Named tuple for a user's inverse index entry. Contains a list of their
+    ratings for each movie, as well as their mean rating and the std deviation
+    of their ratings.
+    """
     def __init__(self, mean, std, uratings):
         self.mean = mean
         self.std = std
         self.uratings = uratings
 
 
-def index_by_users():
+def index_and_evaluate():
     iindex = get_normalised_inverse_index(get_movie_ratings())
     user_ids = iindex.keys()
     nn_index = cosine_nn.CosineNN(END_MID + 1)  # +1 because mids are 1-based
@@ -46,7 +56,7 @@ def index_by_users():
         col = iindex[uid].uratings
         nn_index.index(uid, col)
         if i % 10 == 0:
-            print i/float(len(user_ids)), uid
+            print 'index progress: {:.3%}'.format(i/float(len(user_ids)))
     print 'indexing and setup complete'
 
     # Find all test data instances for which we can predict a rating
@@ -60,7 +70,7 @@ def index_by_users():
     # Predict ratings for test data instances and add up error
     errors = []
     for i, (uid, mid, actual) in enumerate(to_predict):
-        print 'progress:', i / float(len(to_predict))
+        print 'evaluation progress: {:.3%}'.format(i / float(len(to_predict)))
         guess = guess_rating(nn_index, iindex, uid, mid)
         errors.append((guess - actual)**2)
     print 'RMSE:', np.sqrt(np.mean(errors))
@@ -68,11 +78,10 @@ def index_by_users():
 
 def guess_rating(nn_index, iindex, uid, mid):
     """Guess NORMALISED rating. You should scale this by uid's mean and std."""
-
     # This is the threshold for neighbours. If neighbour distance is further
     # than this, they're not a neighbour so ignore them.
     threshold_dist = 1 - np.cos(1/2.0 * np.pi)
-    neighbours = nn_index.query_with_dist(uid, threshold_dist)
+    neighbours = nn_index.query_with_dist(uid)
     sum_inv_cosdist = 0
     weighted_mean = 0
     for (nuid, cosdist) in neighbours:
@@ -99,6 +108,12 @@ def guess_rating(nn_index, iindex, uid, mid):
 
 
 def cached(f):
+    """Decorator to cache function return values to disk.
+
+    Note that this does NOT care about function arguments! So f(2) and f(1) will
+    look the same to the cache. So don't cache a function with arguments unless
+    you know exactly what you're doing.
+    """
     name = '{}_{}-{}_{}_cache.pkl'.format(f.__name__, START_MID,
                                           END_MID, TRAINING_SET)
     name = name.replace('/', '_slash_')  # Filenames with slashes break stuff
@@ -119,13 +134,13 @@ def cached(f):
                 print 'reading', f.__name__, 'from cache'
                 return cPickle.load(open(fpath, 'rb'))
             except EOFError:
-                # Cached version is corrupt
+                # Current cached file is corrupt. Ignore it, generate a new one.
                 return writeToCache(f(*args))
 
     return helper
 
 
-@cached
+# @cached
 def read_probe():
     """A list whose ith element is a dict {user: rating} for movie i."""
     f = open(os.path.join(WORK_DIR, RATED_PROBE_FN))
@@ -144,13 +159,12 @@ def read_probe():
     return movie_vectors
 
 
-@cached
+# @cached
 def get_normalised_inverse_index(movie_ratings):
     """
     A dict of userid : sparse.csr_matrix]. The ith element of the sparse row is
     the user's normalised rating for the ith movie in MOVIE_IDS or 0 if they
     didn't see that movie.
-
     """
     user_index = defaultdict(list)
 
@@ -180,12 +194,14 @@ def get_normalised_inverse_index(movie_ratings):
     return iindex
 
 
-@cached
+# @cached
 def get_movie_ratings():
     """A list whose ith element is a dict {user: rating} for movie i."""
     movie_filenames = [(mi, 'mv_{:0>7}.txt'.format(mi)) for mi in MOVIE_IDS]
     movie_vectors = {}
     for i, fn in movie_filenames:
+        assert os.path.exists(os.path.join(WORK_DIR, TRAINING_SET, fn)),\
+               'ensure dataset containing {} has been generated'.format(fn)
         f = open(os.path.join(WORK_DIR, TRAINING_SET, fn))
         f.readline()
 
@@ -210,4 +226,15 @@ def get_movie_names():
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        description='Run CF and output RMSE.')
+    parser.add_argument(
+        'num_movies',
+        type=int,
+        help='the number of movies in the datasets to process. 1 <= num_movies <= 17770.')
+    arguments = parser.parse_args()
+
+    START_MID, END_MID = 1, arguments.num_movies
+    MOVIE_IDS = range(START_MID, END_MID+1)
+
     main()
