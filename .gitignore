@@ -1,4 +1,4 @@
-cache/*
+cache/[^.]*
 noprobe
 training_*
 *.pyc
