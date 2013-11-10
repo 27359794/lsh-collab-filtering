@@ -1,4 +1,4 @@
 cache/[^.]*
-noprobe
+no_probe_set/[^.]*
 training_*
 *.pyc
