@@ -12,8 +12,6 @@ import cPickle as pickle
 import config
 
 
-CACHE_PATH = os.path.join('..', 'cache')
-
 def cached(func):
     """
     Decorator to cache function's return values to a file on disk.
@@ -25,8 +23,6 @@ def cached(func):
     unhashable arguments.
 
     If you modify a function, it will still load the old cached version.
-
-    Create a directory 'cache' to start caching.
     """
 
     def write_to_cache(fpath, data):
@@ -36,7 +32,7 @@ def cached(func):
 
     def wrapper(*func_args):
         fname = '{}-{}-cache.pkl'.format(func.__name__, hash(repr(func_args)))
-        fpath = os.path.join(CACHE_PATH, fname)
+        fpath = os.path.join(config.CACHE_DIR, fname)
 
         try:
             return pickle.load(open(fpath, 'rb'))
