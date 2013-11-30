@@ -20,3 +20,7 @@ RAW_PROBE_FN = '../probe.txt'
 RATED_PROBE_FN = '../probe_rated.txt'
 
 GENERATED_DIRS = (CACHE_DIR, TRAINING_SET_DIR)
+
+# LSH parameters
+BLOCK_SIZE = 16   # k
+NUM_BLOCKS = 500  # l

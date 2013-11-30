@@ -19,7 +19,7 @@ Instructions
 4. Run `python main.py` with appropriate command line arguments (`-h` flag for help). This will create the nearest neighbour data structure using the training set you generated in the previous command, then it will attempt to predict ratings for test set users and calculate the error.
 5. The last line printed by the script is the RMSE on the probe set.
 
-The *k*,*l* parameters described in the report can be configured as constants in `src/cosine_nn.py`.
+The *k*,*l* parameters described in the report can be configured as constants in `src/config.py`.
 
 Sample Usage
 ------------

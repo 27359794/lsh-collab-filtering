@@ -11,6 +11,8 @@ from collections import defaultdict
 import scipy.spatial
 import doctest
 
+import config
+
 
 class CosineNN(object):
     """
@@ -63,8 +65,7 @@ class CosineNN(object):
     Out[78]: (0.9731803062239186, 0.37536677884638525)
     """
 
-    BLOCK_SIZE = 16
-    NUM_BLOCKS = 500
+    BLOCK_SIZE, NUM_BLOCKS = config.BLOCK_SIZE, config.NUM_BLOCKS
     SIG_LENGTH = BLOCK_SIZE * NUM_BLOCKS
 
     def __init__(self, vector_len):
