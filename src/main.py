@@ -13,7 +13,7 @@ import argparse
 import numpy as np
 import os
 import scipy.sparse
-from collections import defaultdict
+import collections
 
 # Project-specific imports
 import cosine_nn
@@ -23,6 +23,9 @@ import utils
 WORK_DIR = '..'
 TRAINING_SET = 'no_probe_set/'
 RATED_PROBE_FN = 'probe_rated.txt'
+
+# An entry in the inverse index {uid: user data}
+IIndexEntry = collections.namedtuple('IIndexEntry', ['mean', 'std', 'uratings'])
 
 
 def main():
@@ -37,20 +40,6 @@ def main():
 
     start_mid, end_mid = 1, arguments.num_movies
     index_and_evaluate(set(range(start_mid, end_mid)))
-
-
-class InverseIndexEntry(object):
-    """
-    Named tuple for a user's inverse index entry. Contains a list of their
-    ratings for each movie, as well as their mean rating and the std deviation
-    of their ratings.
-
-    TODO: use actual named tuple
-    """
-    def __init__(self, mean, std, uratings):
-        self.mean = mean
-        self.std = std
-        self.uratings = uratings
 
 
 def index_and_evaluate(movie_ids):
@@ -147,7 +136,7 @@ def get_normalised_inverse_index(movie_ids):
     iindex = {}
 
     # Get non-normalised inverse index
-    user_index = defaultdict(list)
+    user_index = collections.defaultdict(list)
     for mid in sorted_movie_ids:
         for (uid, rating) in movie_ratings[mid].iteritems():
             user_index[uid].append((mid, rating))
@@ -166,8 +155,9 @@ def get_normalised_inverse_index(movie_ids):
         for (mid, rating) in user_index[uid]:
             if rating != 0:  # Leave lack of rating as 0
                 user_vec[mid] = (rating - umean) / ustddev
-        sparsified = scipy.sparse.csc_matrix(user_vec).T
-        iindex[uid] = InverseIndexEntry(umean, ustddev, sparsified)
+        sparse_ratings = scipy.sparse.csc_matrix(user_vec).T
+        iindex[uid] = IIndexEntry(mean=umean, std=ustddev,
+                                  uratings=sparse_ratings)
 
     return iindex
 
