@@ -10,7 +10,6 @@ that can be cached.
 """
 
 import argparse
-import cPickle
 import numpy as np
 import os
 import scipy.sparse
@@ -24,7 +23,6 @@ import utils
 WORK_DIR = '..'
 TRAINING_SET = 'no_probe_set/'
 RATED_PROBE_FN = 'probe_rated.txt'
-CACHE = os.path.join(WORK_DIR, 'cache')
 
 
 def main():
@@ -116,40 +114,7 @@ def guess_rating(nn_index, iindex, uid, mid):
     return guess
 
 
-def cached(f):
-    """Decorator to cache function return values to disk.
-
-    Note that this does NOT care about function arguments! So f(2) and f(1) will
-    look the same to the cache. So don't cache a function with arguments unless
-    you know exactly what you're doing.
-    """
-    name = '{}_{}-{}_{}_cache.pkl'.format(f.__name__, START_MID,
-                                          END_MID, TRAINING_SET)
-    name = name.replace('/', '_slash_')  # Filenames with slashes break stuff
-    fpath = os.path.join(CACHE, name)
-
-    def writeToCache(data):
-        with open(fpath, 'wb') as fout:
-            cPickle.dump(data, fout)
-        return data
-
-    def helper(*args):
-        if args:
-            print "WARNING: probably shouldn't use @cached on funcs with args!"
-        if not os.path.exists(fpath):
-            return writeToCache(f(*args))
-        else:
-            try:
-                print 'reading', f.__name__, 'from cache'
-                return cPickle.load(open(fpath, 'rb'))
-            except EOFError:
-                # Current cached file is corrupt. Ignore it, generate a new one.
-                return writeToCache(f(*args))
-
-    return helper
-
-
-# @cached
+@utils.cached
 def read_probe(movie_ids):
     """A list whose ith element is a dict {user: rating} for movie i."""
     probe_file = open(os.path.join(WORK_DIR, RATED_PROBE_FN))
@@ -168,7 +133,7 @@ def read_probe(movie_ids):
     return movie_vectors
 
 
-# @cached
+@utils.cached
 def get_normalised_inverse_index(movie_ids):
     """
     A dict of userid : sparse.csr_matrix]. The ith element of the sparse row is
@@ -207,7 +172,7 @@ def get_normalised_inverse_index(movie_ids):
     return iindex
 
 
-# @cached
+@utils.cached
 def get_movie_ratings(movie_ids):
     """@return {movieid : {userid: rating}"""
     movie_filenames = [(mi, 'mv_{:0>7}.txt'.format(mi)) for mi in movie_ids]
@@ -228,7 +193,7 @@ def get_movie_ratings(movie_ids):
     return movie_vectors
 
 
-# @cached
+@utils.cached
 def get_movie_names():
     """A dictionary of movie id to movie name."""
     movie_names = {}
