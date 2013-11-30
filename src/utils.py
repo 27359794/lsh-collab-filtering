@@ -9,6 +9,8 @@ All-purpose utilities for Python coding.
 import os
 import cPickle as pickle
 
+import config
+
 
 CACHE_PATH = os.path.join('..', 'cache')
 

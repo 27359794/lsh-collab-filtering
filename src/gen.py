@@ -10,7 +10,7 @@ import argparse
 import collections
 import os
 
-ROOT = '..'
+import config
 
 
 def main():
@@ -27,8 +27,14 @@ def main():
         help='use the full dataset as opposed to the medium dataset.')
     args = parser.parse_args()
 
-    training_set_fn = 'training_set' if args.fulldataset else 'training_med'
+    training_set_fn = (config.RAW_TRAINING_LRG_DIR if args.fulldataset
+                       else config.RAW_TRAINING_MED_DIR)
     movie_ids = range(1, args.num_movies + 1)
+
+    # Create necessary directories if they don't exist
+    for directory in config.GENERATED_DIRS:
+        if not os.path.exists(directory):
+            os.makedirs(directory)
 
     generate(movie_ids, training_set_fn)
 
@@ -49,7 +55,7 @@ def generate(mids, training_set):
         str path to directory containing training data per movie
     """
 
-    probe_file = open(os.path.join(ROOT, 'probe.txt'))
+    probe_file = open(config.RAW_PROBE_FN)
     probe = collections.defaultdict(list)
     mid = None
     for line in probe_file:
@@ -59,7 +65,7 @@ def generate(mids, training_set):
             uid = int(line)
             probe[mid].append(uid)
 
-    formatted_probe_file = open(os.path.join(ROOT, 'probe_rated.txt'), 'w')
+    formatted_probe_file = open(config.RATED_PROBE_FN, 'w')
 
     for mid in mids:
         name = 'mv_{:0>7}.txt'.format(mid)
@@ -67,19 +73,19 @@ def generate(mids, training_set):
         if mid in probe:
             formatted_probe_file.write('%d:\n' % mid)
 
-        training_in_file = open(os.path.join(ROOT, training_set, name))
-        training_out_file = open(os.path.join(ROOT, 'no_probe_set/', name), 'w')
+        training_in = open(os.path.join(training_set, name))
+        training_out = open(os.path.join(config.TRAINING_SET_DIR, name), 'w')
 
         # First line always contains movie ID then ':'
-        training_out_file.write(training_in_file.readline())
-        for line in training_in_file:
+        training_out.write(training_in.readline())
+        for line in training_in:
             uid = int(line.split(',')[0])
 
             # Write instance into either training set or test set based on type
             if uid in probe[mid]:
                 formatted_probe_file.write(line)
             else:
-                training_out_file.write(line)
+                training_out.write(line)
 
 
 if __name__ == '__main__':

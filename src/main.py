@@ -16,15 +16,17 @@ import scipy.sparse
 import collections
 
 # Project-specific imports
-import cosine_nn
+from cosine_nn import CosineNN
 import utils
+import config
 
 
-WORK_DIR = '..'
-TRAINING_SET = 'no_probe_set/'
-RATED_PROBE_FN = 'probe_rated.txt'
-
-# A class representing an entry in the inverse index {uid: user data}
+"""
+A class representing an entry in the inverse index {uid: user data}. `mean' and
+`std' are only included for debugging (when you need to know a user's movie
+rating from their normalised movie rating. They aren't used by the algorithm at
+the moment).
+"""
 IIndexEntry = collections.namedtuple('IIndexEntry', ['mean', 'std', 'uratings'])
 
 
@@ -43,9 +45,10 @@ def main():
 
 
 def index_and_evaluate(movie_ids):
+    """Run the collaborative filtering algorithm on the movies in movie_ids."""
     iindex = get_normalised_inverse_index(movie_ids)
     user_ids = iindex.keys()
-    nn_index = cosine_nn.CosineNN(max(movie_ids) + 1) # +1 since ids are 1-based
+    nn_index = CosineNN(max(movie_ids) + 1) # +1 since ids are 1-based
 
     # Add all movies to nn_index
     for i, uid in enumerate(user_ids):
@@ -106,7 +109,7 @@ def guess_rating(nn_index, iindex, uid, mid):
 @utils.cached
 def read_probe(movie_ids):
     """A list whose ith element is a dict {user: rating} for movie i."""
-    probe_file = open(os.path.join(WORK_DIR, RATED_PROBE_FN))
+    probe_file = open(os.path.join(config.RATED_PROBE_FN))
     movie_vectors = {}
     lastid = None
     for line in probe_file:
@@ -167,10 +170,10 @@ def get_movie_ratings(movie_ids):
     """@return {movieid : {userid: rating}"""
     movie_filenames = [(mi, 'mv_{:0>7}.txt'.format(mi)) for mi in movie_ids]
     movie_vectors = {}
-    for i, fn in movie_filenames:
-        assert os.path.exists(os.path.join(WORK_DIR, TRAINING_SET, fn)), \
-               'ensure dataset containing {} has been generated'.format(fn)
-        movie_file = open(os.path.join(WORK_DIR, TRAINING_SET, fn))
+    for i, filen in movie_filenames:
+        assert os.path.exists(os.path.join(config.TRAINING_SET_DIR, filen)), \
+               'ensure dataset containing {} has been generated'.format(filen)
+        movie_file = open(os.path.join(config.TRAINING_SET_DIR, filen))
         movie_file.readline()
 
         uid_to_rating = {}
@@ -181,16 +184,6 @@ def get_movie_ratings(movie_ids):
         movie_file.close()
     print 'loaded ratings from training data'
     return movie_vectors
-
-
-@utils.cached
-def get_movie_names():
-    """A dictionary of movie id to movie name."""
-    movie_names = {}
-    for line in open(os.path.join(WORK_DIR, 'movie_titles.txt')):
-        mid, year, name = line.strip().split(',', 2)
-        movie_names[int(mid)] = name
-    return movie_names
 
 
 if __name__ == '__main__':
