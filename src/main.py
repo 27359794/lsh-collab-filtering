@@ -1,12 +1,12 @@
 """
-code.py
-Author: Daniel Goldbach
+main.py
+Daniel Goldbach
+2013 October
 
 Run collaborative filtering on Netflix challenge dataset and output RMSE.
 
 For quicker debugging time, uncomment the @cached decorations above functions
 that can be cached.
-
 """
 
 import argparse
@@ -16,12 +16,10 @@ import os
 import scipy.sparse
 from collections import defaultdict
 
+# Project-specific imports
 import cosine_nn
+import utils
 
-# These are assigned at the bottom based on CL args
-# TODO: shouldn't be constants...
-START_MID, END_MID = None, None
-MOVIE_IDS = None
 
 WORK_DIR = '..'
 TRAINING_SET = 'no_probe_set/'
@@ -30,15 +28,26 @@ CACHE = os.path.join(WORK_DIR, 'cache')
 
 
 def main():
-    index_and_evaluate()
+    parser = argparse.ArgumentParser(
+        description='Run CF and output RMSE.')
+    parser.add_argument(
+        'num_movies',
+        type=int,
+        help='the number of movies in the datasets to process. '
+             '1 <= num_movies <= 17770.')
+    arguments = parser.parse_args()
+
+    start_mid, end_mid = 1, arguments.num_movies
+    index_and_evaluate(set(range(start_mid, end_mid)))
 
 
-# TODO: replace class w/ named tuple from collections
 class InverseIndexEntry(object):
     """
     Named tuple for a user's inverse index entry. Contains a list of their
     ratings for each movie, as well as their mean rating and the std deviation
     of their ratings.
+
+    TODO: use actual named tuple
     """
     def __init__(self, mean, std, uratings):
         self.mean = mean
@@ -46,21 +55,21 @@ class InverseIndexEntry(object):
         self.uratings = uratings
 
 
-def index_and_evaluate():
-    iindex = get_normalised_inverse_index(get_movie_ratings())
+def index_and_evaluate(movie_ids):
+    iindex = get_normalised_inverse_index(movie_ids)
     user_ids = iindex.keys()
-    nn_index = cosine_nn.CosineNN(END_MID + 1)  # +1 because mids are 1-based
+    nn_index = cosine_nn.CosineNN(max(movie_ids) + 1) # +1 since ids are 1-based
 
     # Add all movies to nn_index
     for i, uid in enumerate(user_ids):
         col = iindex[uid].uratings
         nn_index.index(uid, col)
         if i % 10 == 0:
-            print 'index progress: {:.3%}'.format(i/float(len(user_ids)))
+            print 'index progress: {:.3%}'.format(i / float(len(user_ids)))
     print 'indexing and setup complete'
 
     # Find all test data instances for which we can predict a rating
-    probe_ratings = read_probe()
+    probe_ratings = read_probe(movie_ids)
     to_predict = []
     for mid, mratings in probe_ratings.iteritems():
         for uid, rating in mratings.iteritems():
@@ -141,100 +150,93 @@ def cached(f):
 
 
 # @cached
-def read_probe():
+def read_probe(movie_ids):
     """A list whose ith element is a dict {user: rating} for movie i."""
-    f = open(os.path.join(WORK_DIR, RATED_PROBE_FN))
+    probe_file = open(os.path.join(WORK_DIR, RATED_PROBE_FN))
     movie_vectors = {}
     lastid = None
-    for line in f:
+    for line in probe_file:
         if ':' in line:
             lastid = int(line.strip()[:-1])  # Strip off colon
-            if lastid >= START_MID and lastid <= END_MID:
+            if lastid in movie_ids:
                 movie_vectors[lastid] = {}
         else:
-            uid, rating, date = line.split(',')
+            uid, rating, _ = line.split(',')
             assert lastid is not None, 'first line of probe must be movie id'
-            if lastid >= START_MID and lastid <= END_MID:
+            if lastid in movie_ids:
                 movie_vectors[lastid][int(uid)] = int(rating)
     return movie_vectors
 
 
 # @cached
-def get_normalised_inverse_index(movie_ratings):
+def get_normalised_inverse_index(movie_ids):
     """
     A dict of userid : sparse.csr_matrix]. The ith element of the sparse row is
     the user's normalised rating for the ith movie in MOVIE_IDS or 0 if they
     didn't see that movie.
+
+    @param movie_ratings get_movie_ratings(movie_ids)
     """
-    user_index = defaultdict(list)
-
-    assert MOVIE_IDS == sorted(MOVIE_IDS)
-    for mi in MOVIE_IDS:
-        for (uid, rating) in movie_ratings[mi].iteritems():
-            user_index[uid].append((mi, rating))
-
+    movie_ratings = get_movie_ratings(movie_ids)
+    sorted_movie_ids = sorted(movie_ids)
     iindex = {}
 
-    for uid in user_index:
-        uratings = [r for (m, r) in user_index[uid]]
+    # Get non-normalised inverse index
+    user_index = defaultdict(list)
+    for mid in sorted_movie_ids:
+        for (uid, rating) in movie_ratings[mid].iteritems():
+            user_index[uid].append((mid, rating))
+
+    for uid, udata in user_index.iteritems():
+        uratings = [r for (mid, r) in udata]
         umean, ustddev = np.mean(uratings), np.std(uratings)
-        if ustddev == 0:
-            ustddev = 1  # Prevent div by 0
 
-        vec = [0] * (END_MID+1)
-        for (mi, r) in user_index[uid]:
-            # Don't try to normalise nil ratings, leave them as 0
-            vec[mi] = (r-umean) / ustddev if r > 0 else 0
-        sparsified = scipy.sparse.csc_matrix(vec).T
+        # If user's ratings are uninteresting (not enough ratings or not enough
+        # distinct ratings), don't index user
+        if len(uratings) <= 10 or ustddev == 0:
+            continue
 
-        if (len(set(uratings)) > 1 and
-            len(uratings) > 10):  # If our sparsified vector is interesting
-            iindex[uid] = InverseIndexEntry(umean, ustddev, sparsified)
+        # user_vec[mid] is uid's normalised rating for mid
+        user_vec = [0] * (max(sorted_movie_ids) + 1)
+        for (mid, rating) in user_index[uid]:
+            if rating != 0:  # Leave lack of rating as 0
+                user_vec[mid] = (rating - umean) / ustddev
+        sparsified = scipy.sparse.csc_matrix(user_vec).T
+        iindex[uid] = InverseIndexEntry(umean, ustddev, sparsified)
 
     return iindex
 
 
 # @cached
-def get_movie_ratings():
-    """A list whose ith element is a dict {user: rating} for movie i."""
-    movie_filenames = [(mi, 'mv_{:0>7}.txt'.format(mi)) for mi in MOVIE_IDS]
+def get_movie_ratings(movie_ids):
+    """@return {movieid : {userid: rating}"""
+    movie_filenames = [(mi, 'mv_{:0>7}.txt'.format(mi)) for mi in movie_ids]
     movie_vectors = {}
     for i, fn in movie_filenames:
-        assert os.path.exists(os.path.join(WORK_DIR, TRAINING_SET, fn)),\
+        assert os.path.exists(os.path.join(WORK_DIR, TRAINING_SET, fn)), \
                'ensure dataset containing {} has been generated'.format(fn)
-        f = open(os.path.join(WORK_DIR, TRAINING_SET, fn))
-        f.readline()
+        movie_file = open(os.path.join(WORK_DIR, TRAINING_SET, fn))
+        movie_file.readline()
 
-        d = {}
-        for line in f:
+        uid_to_rating = {}
+        for line in movie_file:
             uid, rating, date = line.split(',')
-            d[int(uid)] = int(rating)
-        f.close()
-        movie_vectors[i] = d
+            uid_to_rating[int(uid)] = int(rating)
+        movie_vectors[i] = uid_to_rating
+        movie_file.close()
     print 'loaded ratings from training data'
     return movie_vectors
 
 
-@cached
+# @cached
 def get_movie_names():
     """A dictionary of movie id to movie name."""
     movie_names = {}
     for line in open(os.path.join(WORK_DIR, 'movie_titles.txt')):
-        i, year, name = line.strip().split(',', 2)
-        movie_names[int(i)] = name
+        mid, year, name = line.strip().split(',', 2)
+        movie_names[int(mid)] = name
     return movie_names
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(
-        description='Run CF and output RMSE.')
-    parser.add_argument(
-        'num_movies',
-        type=int,
-        help='the number of movies in the datasets to process. 1 <= num_movies <= 17770.')
-    arguments = parser.parse_args()
-
-    START_MID, END_MID = 1, arguments.num_movies
-    MOVIE_IDS = range(START_MID, END_MID+1)
-
     main()
