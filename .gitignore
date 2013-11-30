@@ -1,4 +1,5 @@
-cache/[^.]*
-no_probe_set/[^.]*
+cache/
+no_probe_set/
 training_*
+probe_rated.txt
 *.pyc
