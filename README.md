@@ -10,7 +10,6 @@ Requirements
 * numpy + scipy modules
 * Download and extract [`data.zip`](https://dl.dropboxusercontent.com/u/1103246/data.zip) (720MB) or [`data.7z`](https://dl.dropboxusercontent.com/u/1103246/data.7z) (460MB) into the root directory of the project
 
-
 Instructions
 ------------
 
@@ -20,4 +19,29 @@ Instructions
 4. Run `python main.py` with appropriate command line arguments (`-h` flag for help). This will create the nearest neighbour data structure using the training set you generated in the previous command, then it will attempt to predict ratings for test set users and calculate the error.
 5. The last line printed by the script is the RMSE on the probe set.
 
-The *k,l* parameters described in the report can be configured in `src/cosine_nn.py`.
+The *k*,*l* parameters described in the report can be configured as constants in `src/cosine_nn.py`.
+
+Sample Usage
+------------
+
+```bash
+antares: src\ $ python gen.py 300
+successfully generated datasets.
+antares: src\ $ python main.py 300
+index progress: 0.000%
+index progress: 0.917%
+index progress: 1.835%
+...
+index progress: 97.248%
+index progress: 98.165%
+index progress: 99.083%
+indexing and setup complete
+evaluation progress: 0.000%
+evaluation progress: 1.010%
+evaluation progress: 2.020%
+...
+evaluation progress: 96.970%
+evaluation progress: 97.980%
+evaluation progress: 98.990%
+RMSE: 1.05259425337
+```
