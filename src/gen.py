@@ -47,7 +47,6 @@ def generate(mids, training_set):
         list of movie IDs to include in generated sets
     @param training_set
         str path to directory containing training data per movie
-
     """
 
     probe_file = open(os.path.join(ROOT, 'probe.txt'))

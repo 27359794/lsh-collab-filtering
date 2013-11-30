@@ -24,7 +24,7 @@ WORK_DIR = '..'
 TRAINING_SET = 'no_probe_set/'
 RATED_PROBE_FN = 'probe_rated.txt'
 
-# An entry in the inverse index {uid: user data}
+# A class representing an entry in the inverse index {uid: user data}
 IIndexEntry = collections.namedtuple('IIndexEntry', ['mean', 'std', 'uratings'])
 
 

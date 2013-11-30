@@ -127,6 +127,7 @@ class CosineNN(object):
         """Takes a numpy vector of length U and produces its LSH."""
         sketch = self.random_vector_family * vec  # This is a matrix product
         num = 0
+        # Generate the signature (an integer)
         # TODO: find a way of vectorising this loop.
         for i in xrange(CosineNN.SIG_LENGTH):
             if sketch[i, 0] >= 0:
