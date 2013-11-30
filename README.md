@@ -24,7 +24,7 @@ The *k*,*l* parameters described in the report can be configured as constants in
 Sample Usage
 ------------
 
-```bash
+```
 antares: src\ $ python gen.py 300
 successfully generated datasets.
 antares: src\ $ python main.py 300
