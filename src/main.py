@@ -55,24 +55,24 @@ def index_and_evaluate(movie_ids):
         col = iindex[uid].uratings
         nn_index.index(uid, col)
         if i % 10 == 0:
-            print 'index progress: {:.3%}'.format(i / float(len(user_ids)))
-    print 'indexing and setup complete'
+            print('index progress: {:.3%}'.format(i / len(user_ids)))
+    print('indexing and setup complete')
 
     # Find all test data instances for which we can predict a rating
     probe_ratings = read_probe(movie_ids)
     to_predict = []
-    for mid, mratings in probe_ratings.iteritems():
-        for uid, rating in mratings.iteritems():
+    for mid, mratings in probe_ratings.items():
+        for uid, rating in mratings.items():
             if uid in user_ids:
                 to_predict.append((uid, mid, rating))
 
     # Predict ratings for test data instances and add up error
     errors = []
     for i, (uid, mid, actual) in enumerate(to_predict):
-        print 'evaluation progress: {:.3%}'.format(i / float(len(to_predict)))
+        print('evaluation progress: {:.3%}'.format(i / len(to_predict)))
         guess = guess_rating(nn_index, iindex, uid, mid)
         errors.append((guess - actual)**2)
-    print 'RMSE:', np.sqrt(np.mean(errors))
+    print('RMSE:', np.sqrt(np.mean(errors)))
 
 
 def guess_rating(nn_index, iindex, uid, mid):
@@ -141,10 +141,10 @@ def get_normalised_inverse_index(movie_ids):
     # Get non-normalised inverse index
     user_index = collections.defaultdict(list)
     for mid in sorted_movie_ids:
-        for (uid, rating) in movie_ratings[mid].iteritems():
+        for (uid, rating) in movie_ratings[mid].items():
             user_index[uid].append((mid, rating))
 
-    for uid, udata in user_index.iteritems():
+    for uid, udata in user_index.items():
         uratings = [r for (mid, r) in udata]
         umean, ustddev = np.mean(uratings), np.std(uratings)
 
@@ -182,7 +182,7 @@ def get_movie_ratings(movie_ids):
             uid_to_rating[int(uid)] = int(rating)
         movie_vectors[i] = uid_to_rating
         movie_file.close()
-    print 'loaded ratings from training data'
+    print('loaded ratings from training data')
     return movie_vectors
 
 

@@ -92,7 +92,7 @@ class CosineNN(object):
         self.col_vecs[iid] = col
 
         # Index this signature
-        for block_num in xrange(CosineNN.NUM_BLOCKS):
+        for block_num in range(CosineNN.NUM_BLOCKS):
             block_val = extract_block(sig, block_num)
             self.nn_index[(block_num, block_val)].append(iid)
 
@@ -106,7 +106,7 @@ class CosineNN(object):
         """
         sig = self.signatures[iid]
         resultset = set()
-        for block_num in xrange(CosineNN.NUM_BLOCKS):
+        for block_num in range(CosineNN.NUM_BLOCKS):
             block_val = extract_block(sig, block_num)
             resultset.update(self.nn_index[(block_num, block_val)])
         return resultset
@@ -130,7 +130,7 @@ class CosineNN(object):
         num = 0
         # Generate the signature (an integer)
         # TODO: find a way of vectorising this loop.
-        for i in xrange(CosineNN.SIG_LENGTH):
+        for i in range(CosineNN.SIG_LENGTH):
             if sketch[i, 0] >= 0:
                 num |= (1 << i)
         return num

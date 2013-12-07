@@ -38,7 +38,7 @@ def main():
 
     generate(movie_ids, training_set_fn)
 
-    print 'successfully generated datasets.'
+    print('successfully generated datasets.')
 
 
 def generate(mids, training_set):
