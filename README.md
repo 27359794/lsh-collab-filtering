@@ -6,7 +6,7 @@ Efficient Collaborative Filtering with LSH
 Requirements
 ------------
 
-* Python 2.7.x
+* Python 2.7.x or 3.3.x
 * numpy + scipy modules
 * Download and extract [`data.zip`](https://dl.dropboxusercontent.com/u/1103246/data.zip) (720MB) or [`data.7z`](https://dl.dropboxusercontent.com/u/1103246/data.7z) (460MB) into the root directory of the project
 
